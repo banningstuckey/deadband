@@ -6,6 +6,26 @@
 
 * { box-sizing: border-box; }
 
+/* This is an app console, not a document: dragging across the map,
+   rail, or cards must never start a text selection. The exceptions
+   are the places whose text exists to be copied out — the event log
+   and the detail panel's event list. */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+#purdue-map text {
+  -webkit-user-select: none;
+  user-select: none;
+}
+.event-log, .event-log *,
+#detail-body, #detail-body *,
+code, pre {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 body {
   margin: 0;
   background: var(--md-sys-color-surface);
