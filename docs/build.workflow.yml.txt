@@ -1,0 +1,62 @@
+# Deadband CI/release workflow.
+# GitHub Apps cannot create workflow files (missing `workflows`
+# permission), so this ships as a text copy. Activate it once:
+#   mkdir -p .github/workflows
+#   cp docs/build.workflow.yml.txt .github/workflows/build.yml
+#   git add .github/workflows/build.yml && git commit -m "CI workflow" && git push
+#
+name: Build
+
+# Every push/PR: the engine core's test suite runs on all three
+# desktop OSes (the core has no GUI dependencies, so this is fast and
+# needs no system packages). Tagging a version (v*) additionally
+# builds the full Tauri app on macOS, Windows, and Linux and drafts a
+# GitHub Release with the installers attached.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  core-tests:
+    name: Core tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run deadband-core tests
+        run: cargo test -p deadband-core
+
+  release:
+    name: Release build (${{ matrix.os }})
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-22.04, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev patchelf libssl-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+      - name: Build app and draft the release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "Deadband ${{ github.ref_name }}"
+          releaseBody: "See the README for what Deadband does and the five-minute demo. Builds are unsigned in v1: macOS may need right-click → Open the first time; Windows SmartScreen may need More info → Run anyway."
+          releaseDraft: true
+          prerelease: false

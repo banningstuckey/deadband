@@ -534,16 +534,22 @@
         '" text-anchor="middle">' + z.label + '</text>';
     });
 
-    // Positions per device.
+    // Positions per device. Node width is computed per band from the
+    // device count, so any number of devices fits inside the band —
+    // a fixed step used to push the 5th+ node (and its conduits) off
+    // the right edge of the map.
+    const fit = (s, n) => (s.length > n ? s.slice(0, Math.max(1, n - 1)) + '…' : s);
     const place = (devices, y) => {
+      const n = devices.length;
+      if (!n) return;
+      const gap = 12, avail = 944 - X0;
+      const w = Math.min(NODE_W, (avail - (n - 1) * gap) / n);
       devices.forEach((d, idx) => {
-        positions.set(d.ip, { x: X0 + idx * XSTEP, y: y + (BH - NODE_H) / 2, d });
+        positions.set(d.ip, { x: X0 + idx * (w + gap), y, w, d });
       });
     };
-    LEVELS.forEach((level, i) => place(byLevel.get(level.label), bandY(i)));
-    unclass.forEach((d, idx) => {
-      positions.set(d.ip, { x: X0 + idx * XSTEP, y: UNCLASS_Y + 7, d });
-    });
+    LEVELS.forEach((level, i) => place(byLevel.get(level.label), bandY(i) + (BH - NODE_H) / 2));
+    place(unclass, UNCLASS_Y + 7);
 
     // Conduits first (nodes paint over their middles).
     snapshot.connections.forEach((c) => {
@@ -552,20 +558,24 @@
       const width = Math.min(2 + c.packet_count / 300, 5).toFixed(1);
       out += '<line class="conduit" data-pair="' + esc(pairKey(c.src_ip, c.dst_ip)) +
         '" data-a="' + esc(c.src_ip) + '" data-b="' + esc(c.dst_ip) +
-        '" x1="' + (a.x + NODE_W / 2) + '" y1="' + (a.y + NODE_H / 2) +
-        '" x2="' + (b.x + NODE_W / 2) + '" y2="' + (b.y + NODE_H / 2) +
+        '" x1="' + (a.x + a.w / 2) + '" y1="' + (a.y + NODE_H / 2) +
+        '" x2="' + (b.x + b.w / 2) + '" y2="' + (b.y + NODE_H / 2) +
         '" stroke-width="' + width + '"><title>' +
         esc(c.src_ip) + ' → ' + esc(c.dst_ip) + ':' + c.dst_port + ' (' +
         esc(c.protocol) + ', ' + c.packet_count + ' packets)</title></line>';
     });
 
-    // Device nodes.
+    // Device nodes (text clipped to the node's computed width).
     positions.forEach((pos, ip) => {
       const d = pos.d;
-      out += '<g class="node" data-ip="' + esc(ip) + '" transform="translate(' + pos.x + ' ' + pos.y + ')">' +
-        '<rect width="' + NODE_W + '" height="' + NODE_H + '" rx="8"></rect>' +
-        '<text class="n-label" x="12" y="21">' + esc(d.label || ip) + '</text>' +
-        '<text class="n-sub" x="12" y="38">' + esc(d.role) + ' · ' + esc(ip) + '</text></g>';
+      const compact = pos.w < 150;
+      const labelChars = Math.max(6, Math.floor((pos.w - 22) / 7.3));
+      const subChars = Math.max(8, Math.floor((pos.w - 22) / 5.9));
+      out += '<g class="node' + (compact ? ' compact' : '') + '" data-ip="' + esc(ip) +
+        '" transform="translate(' + pos.x + ' ' + pos.y + ')">' +
+        '<rect width="' + pos.w + '" height="' + NODE_H + '" rx="8"></rect>' +
+        '<text class="n-label" x="12" y="21">' + esc(fit(d.label || ip, labelChars)) + '</text>' +
+        '<text class="n-sub" x="12" y="38">' + esc(fit(d.role + ' · ' + ip, subChars)) + '</text></g>';
     });
 
     if (snapshot.devices.length === 0) {

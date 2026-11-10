@@ -22,6 +22,54 @@ systems, and factories.
 > anomaly layer raises the early warning. An optional local-LLM
 > analyst layer is next.
 
+## Try it in five minutes (the demo)
+
+Deadband ships with a built-in simulated plant, so the whole demo
+runs offline on one machine:
+
+1. **Launch the app.** The splash fades into the Live map: seven
+   Purdue bands, the dashed IT/OT DMZ in the middle.
+2. **Start the plant** (Events view → *Start simulation*). Five
+   devices appear on their levels — Office PC, Historian, HMI, two
+   PLCs — and conduits pulse as Modbus traffic flows. Click any
+   device for its recent activity.
+3. **Let it learn.** Open the Rules view. Layer 1 (rules) is armed
+   immediately; layer 2 (anomaly) flips from LEARNING to ARMED after
+   a few minutes of traffic. Normal operation raises **zero** alerts
+   — the test suite proves this, and you can watch it stay quiet.
+4. **Fire the rogue laptop** (Rules → *Rogue laptop writes to a
+   PLC*). Red alerts land in the Events log and flash on the map:
+   new device, write from a non-HMI, write outside the pattern.
+5. **Fire slow recon** (Rules → *Slow recon*). Nothing is written,
+   nothing breaks — an unknown device just probes, quietly. The
+   rules only note a new device; the **anomaly layer raises the
+   early warning**, with its contributing factors listed. That gap —
+   warning during reconnaissance, before anything destructive — is
+   the point of the product.
+6. **Replay a capture** (Events → *Replay the bundled sample*). A
+   foreign plant Deadband has never seen is discovered passively
+   into the UNPLACED strip — including its own rogue laptop, which
+   the rules flag on sight.
+
+## Releases
+
+Pushing a `v*` tag builds macOS, Windows, and Linux installers via
+GitHub Actions and drafts a GitHub Release with them attached.
+Builds are **unsigned in v1**: macOS may require right-click → Open
+the first time, and Windows SmartScreen may require *More info →
+Run anyway*. Every push also runs the core test suite on all three
+OSes.
+
+The workflow ships as `docs/build.workflow.yml.txt` (GitHub Apps
+can't create workflow files); activate it once with:
+
+```
+mkdir -p .github/workflows
+cp docs/build.workflow.yml.txt .github/workflows/build.yml
+git add .github/workflows/build.yml
+git commit -m "CI workflow" && git push
+```
+
 ## Brand assets
 
 The Deadband logo (shield mark + wordmark) appears on the app's splash

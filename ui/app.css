@@ -213,6 +213,8 @@ footer.note { color: var(--md-sys-color-on-surface-variant); font-size: 12px; }
 #purdue-map .node text { pointer-events: none; }
 #purdue-map .n-label { font-size: 13px; font-weight: 600; fill: var(--md-sys-color-on-surface); }
 #purdue-map .n-sub { font-size: 10.5px; fill: var(--md-sys-color-on-surface-variant); }
+#purdue-map .node.compact .n-label { font-size: 11px; }
+#purdue-map .node.compact .n-sub { font-size: 9px; }
 
 .detail-events { margin: 8px 0 2px; padding-left: 18px; line-height: 1.8; font-size: 13px; }
 
