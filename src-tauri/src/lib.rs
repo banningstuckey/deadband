@@ -203,15 +203,13 @@ pub fn run() {
             // Local-first storage: one SQLite file in the app's data
             // directory. If that is unavailable for any reason, fall
             // back to in-memory rather than refusing to start.
-            let store = app
-                .path()
-                .app_data_dir()
-                .and_then(|dir| {
-                    std::fs::create_dir_all(&dir)?;
-                    Ok(dir.join("deadband.db"))
-                })
-                .and_then(|path| Store::open(path).map_err(|e| std::io::Error::other(e.to_string())))
-                .unwrap_or_else(|_| Store::open_in_memory().expect("in-memory store"));
+            let file_store = (|| -> Option<Store> {
+                let dir = app.path().app_data_dir().ok()?;
+                std::fs::create_dir_all(&dir).ok()?;
+                Store::open(dir.join("deadband.db")).ok()
+            })();
+            let store = file_store
+                .unwrap_or_else(|| Store::open_in_memory().expect("in-memory store"));
             app.manage(AppState {
                 store: Arc::new(Mutex::new(store)),
                 running: Arc::new(AtomicBool::new(false)),
