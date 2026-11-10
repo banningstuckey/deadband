@@ -14,10 +14,22 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{Emitter, Manager};
 
-/// Shared app state: the engine's store plus the simulation switch.
+/// Shared app state: the engine's store plus the feed switches.
 struct AppState {
     store: Arc<Mutex<Store>>,
     running: Arc<AtomicBool>,
+    replay_running: Arc<AtomicBool>,
+    replay_info: Arc<Mutex<ReplayInfo>>,
+}
+
+/// Bookkeeping for the capture replay, for the UI's status line.
+#[derive(Debug, Default, Clone)]
+struct ReplayInfo {
+    label: Option<String>,
+    total: usize,
+    done: usize,
+    finished: bool,
+    message: Option<String>,
 }
 
 fn now_ms() -> i64 {
@@ -108,6 +120,8 @@ fn status_of(state: &AppState) -> SimulationStatus {
 /// stored event to the UI as `traffic`. Idempotent while running.
 #[tauri::command]
 fn start_simulation(app: tauri::AppHandle, state: tauri::State<AppState>) -> SimulationStatus {
+    // One live feed at a time: starting the plant stops any replay.
+    state.replay_running.store(false, Ordering::Relaxed);
     if state.running.swap(true, Ordering::Relaxed) {
         return status_of(&state);
     }
@@ -157,6 +171,135 @@ fn simulation_status(state: tauri::State<AppState>) -> SimulationStatus {
     status_of(&state)
 }
 
+/// Replay state for the UI's status line.
+#[derive(Debug, Serialize)]
+struct ReplayStatus {
+    running: bool,
+    label: Option<String>,
+    done: usize,
+    total: usize,
+    finished: bool,
+    message: Option<String>,
+}
+
+fn replay_status_of(state: &AppState) -> ReplayStatus {
+    let info = state.replay_info.lock().map(|info| info.clone()).unwrap_or_default();
+    ReplayStatus {
+        running: state.replay_running.load(Ordering::Relaxed),
+        label: info.label,
+        done: info.done,
+        total: info.total,
+        finished: info.finished,
+        message: info.message,
+    }
+}
+
+/// Starts a capture replay: a `.pcap` file from disk when `path` is
+/// given, otherwise the bundled sample capture. Packets flow through
+/// the same pipeline as the simulated plant; timestamps are rebased
+/// so the capture plays as if it were happening now, paced at the
+/// capture's own rhythm divided by `speed`.
+#[tauri::command]
+fn start_replay(
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+    path: Option<String>,
+    speed: Option<f64>,
+) -> ReplayStatus {
+    if state.replay_running.swap(true, Ordering::Relaxed) {
+        return replay_status_of(&state);
+    }
+    let fail = |state: &AppState, message: String| {
+        state.replay_running.store(false, Ordering::Relaxed);
+        if let Ok(mut info) = state.replay_info.lock() {
+            *info = ReplayInfo { message: Some(message), ..ReplayInfo::default() };
+        }
+        replay_status_of(state)
+    };
+    let (label, packets) = match path.as_deref().map(str::trim).filter(|p| !p.is_empty()) {
+        Some(path) => {
+            let bytes = match std::fs::read(path) {
+                Ok(bytes) => bytes,
+                Err(e) => return fail(&state, format!("Could not read {path}: {e}")),
+            };
+            match deadband_core::pcap::read_pcap(&bytes) {
+                Ok(packets) => (path.to_string(), packets),
+                Err(e) => return fail(&state, format!("{path}: {e}")),
+            }
+        }
+        None => ("bundled sample capture".to_string(), deadband_core::sample::sample_packets()),
+    };
+    if packets.is_empty() {
+        return fail(&state, format!("{label}: no packets in capture"));
+    }
+    // One live feed at a time: replaying stops the simulated plant.
+    state.running.store(false, Ordering::Relaxed);
+    let speed = speed.unwrap_or(1.0);
+    let speed = if speed.is_finite() { speed.clamp(0.25, 100.0) } else { 1.0 };
+    let shift = now_ms() - packets[0].timestamp_ms;
+    let total = packets.len();
+    if let Ok(mut info) = state.replay_info.lock() {
+        *info = ReplayInfo {
+            label: Some(label),
+            total,
+            done: 0,
+            finished: false,
+            message: None,
+        };
+    }
+    let store = Arc::clone(&state.store);
+    let running = Arc::clone(&state.replay_running);
+    let info_handle = Arc::clone(&state.replay_info);
+    std::thread::spawn(move || {
+        let mut previous_ts: Option<i64> = None;
+        for (index, packet) in packets.iter().enumerate() {
+            if !running.load(Ordering::Relaxed) {
+                return;
+            }
+            if let Some(previous) = previous_ts {
+                let delta_ms = (packet.timestamp_ms - previous).max(0) as f64 / speed;
+                let sleep_ms = delta_ms.min(2_500.0) as u64;
+                if sleep_ms > 0 {
+                    std::thread::sleep(std::time::Duration::from_millis(sleep_ms));
+                }
+            }
+            previous_ts = Some(packet.timestamp_ms);
+            let shifted = deadband_core::source::Packet {
+                timestamp_ms: packet.timestamp_ms + shift,
+                data: packet.data.clone(),
+            };
+            let events = match store.lock() {
+                Ok(store) => deadband_core::engine::process_packet(&store, &shifted),
+                Err(_) => Vec::new(),
+            };
+            for event in &events {
+                let _ = app.emit("traffic", EventDto::from(event));
+            }
+            if let Ok(mut info) = info_handle.lock() {
+                info.done = index + 1;
+            }
+        }
+        if let Ok(mut info) = info_handle.lock() {
+            info.finished = true;
+        }
+        running.store(false, Ordering::Relaxed);
+    });
+    replay_status_of(&state)
+}
+
+/// Stops the capture replay. Stored events stay in the database.
+#[tauri::command]
+fn stop_replay(state: tauri::State<AppState>) -> ReplayStatus {
+    state.replay_running.store(false, Ordering::Relaxed);
+    replay_status_of(&state)
+}
+
+/// Current replay state (the UI polls this alongside the sim status).
+#[tauri::command]
+fn replay_status(state: tauri::State<AppState>) -> ReplayStatus {
+    replay_status_of(&state)
+}
+
 /// The most recent stored events (newest first) — the log's backlog
 /// when the Events view opens.
 #[tauri::command]
@@ -203,6 +346,8 @@ struct MapDeviceDto {
     role: String,
     level_label: Option<String>,
     level_name: Option<String>,
+    first_seen: i64,
+    last_seen: i64,
 }
 
 /// One conduit for the Purdue map, from the connection table.
@@ -237,6 +382,8 @@ fn network_snapshot(state: tauri::State<AppState>) -> NetworkSnapshot {
             role: d.role.as_tag().to_string(),
             level_label: d.level.map(|l| l.label().to_string()),
             level_name: d.level.map(|l| l.name().to_string()),
+            first_seen: d.first_seen,
+            last_seen: d.last_seen,
         })
         .collect();
     let connections = store
@@ -272,6 +419,8 @@ pub fn run() {
             app.manage(AppState {
                 store: Arc::new(Mutex::new(store)),
                 running: Arc::new(AtomicBool::new(false)),
+                replay_running: Arc::new(AtomicBool::new(false)),
+                replay_info: Arc::new(Mutex::new(ReplayInfo::default())),
             });
             Ok(())
         })
@@ -282,7 +431,10 @@ pub fn run() {
             simulation_status,
             recent_events,
             plant_devices,
-            network_snapshot
+            network_snapshot,
+            start_replay,
+            stop_replay,
+            replay_status
         ])
         .run(tauri::generate_context!())
         .expect("error while running Deadband");

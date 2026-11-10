@@ -10,13 +10,14 @@ phase, before anything destructive happens. It is built for the plants that
 can't afford enterprise OT security platforms: small utilities, water
 systems, and factories.
 
-> **Status: Phase 2 — live Purdue map.** The app ships a built-in lab:
-> five virtual devices (office PC, historian, HMI, two PLCs) generating
-> real Modbus/TCP frames through the real pipeline — parser, SQLite
-> store, live event log — and the home screen is now the live Purdue
-> map: devices on their levels, conduits pulsing with traffic, click
-> anything for detail. Detection lands phase by phase; see the
-> architecture below.
+> **Status: Phase 3 — PCAP replay + passive discovery.** The app ships
+> a built-in lab (five virtual devices generating real Modbus/TCP
+> frames) and the live Purdue map — and it now also replays packet
+> captures: open the bundled sample (a foreign plant Deadband knows
+> nothing about, devices discovered from the wire into the UNPLACED
+> strip and the Assets inventory) or any `.pcap` from your own
+> Wireshark work, all through the same pipeline. Detection lands
+> phase by phase; see the architecture below.
 
 ## Safety rules (non-negotiable)
 

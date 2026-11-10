@@ -10,8 +10,9 @@
 //!
 //! 1. [`SimulatedSource`] — the built-in virtual plant (Phase 1). The
 //!    lab that proves every other phase without touching real equipment.
-//! 2. PCAP replay — public ICS capture files played through the same
-//!    pipeline in real time (Phase 3).
+//! 2. [`crate::pcap::PcapSource`] — capture files (Wireshark/tcpdump
+//!    recordings, public ICS datasets) replayed through the same
+//!    pipeline (Phase 3).
 //! 3. Live capture — a mirrored/SPAN port or the host's own interface,
 //!    read-only at the OS level (Phase 7).
 

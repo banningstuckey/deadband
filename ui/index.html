@@ -39,7 +39,7 @@
     <main>
       <div class="page-head">
         <headline medium id="page-title">Live map</headline>
-        <span class="phase-tag">Phase 2 — live Purdue map</span>
+        <span class="phase-tag">Phase 3 — PCAP replay + discovery</span>
       </div>
 
       <section id="view-live" class="view">
@@ -99,6 +99,36 @@
         </nmui-card>
 
         <nmui-card outlined>
+          <h2 class="card-title">Replay a capture (PCAP)</h2>
+          <p>Feed the pipeline a recording instead of the live plant — the same
+          detection path, exercised on traffic Deadband has never seen. Devices in
+          the capture are <strong>discovered from the wire</strong>: watch the map's
+          UNPLACED strip and the Assets view.</p>
+          <p id="replay-status" class="sim-status">No replay running</p>
+          <div class="card-actions replay-controls">
+            <nmui-button filled id="btn-replay-sample">Replay sample capture</nmui-button>
+            <label class="replay-speed">Speed
+              <select id="replay-speed">
+                <option value="1">1× real time</option>
+                <option value="4">4×</option>
+                <option value="20" selected>20×</option>
+                <option value="100">100×</option>
+              </select>
+            </label>
+            <nmui-button outlined id="btn-replay-stop">Stop replay</nmui-button>
+          </div>
+          <div class="replay-file">
+            <input id="replay-path" class="text-input" type="text" spellcheck="false"
+              placeholder="…or a .pcap from your Wireshark lab — paste its full path, e.g. /Users/you/captures/lab.pcap">
+            <nmui-button tonal id="btn-replay-file">Replay file</nmui-button>
+          </div>
+          <p class="dim">The bundled sample is ~75 s from a foreign plant
+          (192.168.50.0/24) that Deadband knows nothing about — including one
+          device that does not belong. See if you can spot it in the log before
+          Phase 4's rules learn to shout about it.</p>
+        </nmui-card>
+
+        <nmui-card outlined>
           <h2 class="card-title">Live event log</h2>
           <div id="event-log" class="event-log">
             <p class="dim" id="log-empty">No events yet — start the simulation and Modbus traffic will stream in here.</p>
@@ -108,10 +138,20 @@
 
       <section id="view-assets" class="view" hidden>
         <nmui-card outlined>
-          <h2 class="card-title">Assets</h2>
-          <p>Passive asset inventory arrives with PCAP replay in Phase 3 — devices
-          will appear here as traffic reveals them. The simulated plant's roster
-          is listed on the Live map view.</p>
+          <h2 class="card-title">Asset inventory — discovered passively</h2>
+          <p>Every device Deadband knows about, learned by watching traffic —
+          never by asking the network. Devices from a replayed capture arrive
+          with no label and no Purdue level: placing them is the analyst's job
+          (assisted placement arrives with the rules layer).</p>
+          <div id="assets-wrap">
+            <p class="dim" id="assets-empty">No devices yet — run the simulation or replay a capture.</p>
+            <table class="assets-table" id="assets-table" hidden>
+              <thead>
+                <tr><th>IP</th><th>Label</th><th>Role</th><th>Purdue level</th><th>First seen</th><th>Last seen</th></tr>
+              </thead>
+              <tbody id="assets-body"></tbody>
+            </table>
+          </div>
         </nmui-card>
       </section>
 
@@ -214,6 +254,56 @@
     refreshStatus();
   });
 
+  // ---- capture replay ---------------------------------------------------
+  const replayStatusEl = document.getElementById('replay-status');
+
+  function showReplayStatus(s) {
+    if (!s) return;
+    if (s.message) {
+      replayStatusEl.textContent = 'Replay: ' + s.message;
+    } else if (s.running) {
+      replayStatusEl.textContent = 'Replaying ' + (s.label || 'capture') +
+        ' · packet ' + s.done + ' of ' + s.total;
+    } else if (s.finished) {
+      replayStatusEl.textContent = 'Replay finished — ' + (s.label || 'capture') +
+        ' · ' + s.total + ' packets. Check the map and Assets.';
+    } else if (s.label) {
+      replayStatusEl.textContent = 'Replay stopped — ' + s.label +
+        ' · packet ' + s.done + ' of ' + s.total;
+    } else {
+      replayStatusEl.textContent = 'No replay running';
+    }
+  }
+
+  async function refreshReplayStatus() {
+    if (!invoke) return;
+    try { showReplayStatus(await invoke('replay_status')); }
+    catch (err) { /* status line is best-effort */ }
+  }
+
+  async function beginReplay(path) {
+    if (!invoke) return;
+    const speed = parseFloat(document.getElementById('replay-speed').value) || 1;
+    try {
+      showReplayStatus(await invoke('start_replay', { path: path || null, speed }));
+    } catch (err) {
+      replayStatusEl.textContent = 'Replay failed to start: ' + err;
+    }
+    refreshStatus();
+  }
+
+  document.getElementById('btn-replay-sample').addEventListener('click', () => beginReplay(null));
+  document.getElementById('btn-replay-file').addEventListener('click', () => {
+    const path = document.getElementById('replay-path').value.trim();
+    if (path) beginReplay(path);
+    else replayStatusEl.textContent = 'Paste the full path to a .pcap file first.';
+  });
+  document.getElementById('btn-replay-stop').addEventListener('click', async () => {
+    if (!invoke) return;
+    showReplayStatus(await invoke('stop_replay'));
+  });
+  setInterval(refreshReplayStatus, 1000);
+
   (async () => {
     if (!invoke) return;
     // Roster for the Live map view.
@@ -276,6 +366,7 @@
         lastSig = snapshotSig(s);
         snapshot = s;
         renderMap();
+        renderAssets();
       }
     } catch (err) { /* map refresh is best-effort */ }
   }
@@ -359,6 +450,31 @@
         '">No devices yet — start the simulation (Events view) and the plant will appear here.</text>';
     }
     svg.innerHTML = out;
+  }
+
+  // ---- assets table -----------------------------------------------------
+  function renderAssets() {
+    const table = document.getElementById('assets-table');
+    const body = document.getElementById('assets-body');
+    const empty = document.getElementById('assets-empty');
+    if (!table || !body) return;
+    const devices = [...snapshot.devices].sort((a, b) =>
+      (a.first_seen - b.first_seen) || a.ip.localeCompare(b.ip));
+    body.innerHTML = '';
+    devices.forEach((d) => {
+      const tr = document.createElement('tr');
+      [d.ip, d.label || '—', d.role,
+       d.level_name ? ('Level ' + d.level_label + ' — ' + d.level_name) : 'unplaced',
+       d.first_seen ? fmtTime(d.first_seen) : '—',
+       d.last_seen ? fmtTime(d.last_seen) : '—'].forEach((text) => {
+        const td = document.createElement('td');
+        td.textContent = text;
+        tr.appendChild(td);
+      });
+      body.appendChild(tr);
+    });
+    table.hidden = devices.length === 0;
+    if (empty) empty.hidden = devices.length !== 0;
   }
 
   // ---- detail panel -----------------------------------------------------
