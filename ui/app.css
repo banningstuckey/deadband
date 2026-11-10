@@ -100,12 +100,22 @@ ol.levels li span { color: var(--md-sys-color-on-surface-variant); }
 
 .card-actions { margin-top: 12px; }
 
-.rail-brand { padding: 4px 8px; letter-spacing: 0.06em; }
 .rail-brand-row { display: flex; align-items: center; gap: 4px; }
-/* The mark's artwork sits on a pure-black ground while the rail is
+/* The brand artwork sits on a pure-black ground while the rail is
    charcoal-navy; screen blending makes black act transparent, so the
-   shield floats on the rail's own color instead of a mismatched tile. */
+   art floats on the rail's own color instead of a mismatched tile. */
 .rail-mark { width: 34px; height: 34px; display: block; margin-left: 8px; mix-blend-mode: screen; }
+/* The DEADBAND wordmark, windowed out of the full logo already in the
+   repo (measured crop: x 148–1261, y 600–714 of the 1408×768 image) —
+   the real steel/copper lettering, no new asset files. */
+.rail-wordmark {
+  width: 188px; height: 20px; flex: none;
+  background-image: url("./assets/deadband-logo.jpg");
+  background-size: 126.5% 673.68%;
+  background-position: 50.17% 91.74%;
+  background-repeat: no-repeat;
+  mix-blend-mode: screen;
+}
 
 footer.note { color: var(--md-sys-color-on-surface-variant); font-size: 12px; }
 
