@@ -63,7 +63,7 @@ pub fn engine_status() -> EngineStatus {
     EngineStatus {
         name: "Deadband",
         version: env!("CARGO_PKG_VERSION"),
-        phase: "Phase 4 — rules layer",
+        phase: "Phase 5 — anomaly early warning",
         detection_layers: ["rules", "anomaly", "analyst"],
     }
 }
@@ -77,6 +77,6 @@ mod tests {
         let status = engine_status();
         assert_eq!(status.name, "Deadband");
         assert_eq!(status.detection_layers.len(), 3);
-        assert!(status.phase.starts_with("Phase 4"));
+        assert!(status.phase.starts_with("Phase 5"));
     }
 }

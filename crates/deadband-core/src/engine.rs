@@ -100,24 +100,54 @@ pub fn process_packet_with_rules(
 ) -> Vec<Event> {
     let mut events = process_packet(store, packet);
     let alerts = rules.observe_packet(store, packet, &events);
-    if !alerts.is_empty() {
-        let parsed = parse_packet(packet).ok();
-        let alert_events: Vec<Event> = alerts
-            .iter()
-            .map(|alert| {
-                let mut event = Event::new(
-                    alert.timestamp,
-                    EventKind::AlertRaised,
-                    format!("{} — {}", alert.title, alert.detail),
-                );
-                event.src_ip = alert.device_ip;
-                event.dst_ip = parsed.as_ref().and_then(|p| p.dst_ip);
-                event
-            })
-            .collect();
-        events.extend(finish(store, alert_events));
-    }
+    append_alerts(store, packet, alerts, &mut events);
     events
+}
+
+/// The full detection stack: rules (per packet) plus the anomaly
+/// layer (per chunk — its alerts surface when a chunk closes). This
+/// is what the app's feeds run.
+pub fn process_packet_full(
+    store: &Store,
+    packet: &Packet,
+    rules: &mut crate::detect::RulesLayer,
+    anomaly: &mut crate::detect::AnomalyLayer,
+) -> Vec<Event> {
+    let mut events = process_packet(store, packet);
+    let rule_alerts = rules.observe_packet(store, packet, &events);
+    append_alerts(store, packet, rule_alerts, &mut events);
+    let anomaly_alerts = anomaly.observe_packet(store, packet, &events);
+    append_alerts(store, packet, anomaly_alerts, &mut events);
+    events
+}
+
+/// Converts detection alerts to stored alert events on the packet's
+/// event list: "[rule] Title — detail" as the summary, the alert's
+/// subject device as the source.
+fn append_alerts(
+    store: &Store,
+    packet: &Packet,
+    alerts: Vec<crate::detect::Alert>,
+    events: &mut Vec<Event>,
+) {
+    if alerts.is_empty() {
+        return;
+    }
+    let parsed = parse_packet(packet).ok();
+    let alert_events: Vec<Event> = alerts
+        .iter()
+        .map(|alert| {
+            let mut event = Event::new(
+                alert.timestamp,
+                EventKind::AlertRaised,
+                format!("{} — {}", alert.title, alert.detail),
+            );
+            event.src_ip = alert.device_ip;
+            event.dst_ip = parsed.as_ref().and_then(|p| p.dst_ip);
+            event
+        })
+        .collect();
+    events.extend(finish(store, alert_events));
 }
 
 /// Builds the per-packet event: Modbus commands get the full sentence,
@@ -300,6 +330,31 @@ mod tests {
         }
         assert_eq!(new_devices, 6, "all six foreign devices announced");
         assert_eq!(laptop_write_alerts, 2, "the laptop's write trips rules 3 and 7");
+    }
+
+    #[test]
+    fn anomaly_layer_stays_quiet_on_normal_traffic() {
+        // 2,000 packets ≈ 13 chunks: learning completes mid-run and
+        // the trained layer must still find ordinary operation boring.
+        let store = Store::open_in_memory().unwrap();
+        for device in sim::roster() {
+            store.add_device(&device).unwrap();
+        }
+        let mut rules = crate::detect::RulesLayer::new();
+        let mut anomaly = crate::detect::AnomalyLayer::new();
+        let mut source = SimulatedSource::new(1_700_000_000_000);
+        let mut warnings = 0;
+        for _ in 0..2000 {
+            let packet = source.next_packet().unwrap();
+            for event in process_packet_full(&store, &packet, &mut rules, &mut anomaly) {
+                if event.summary.contains("[early-warning]") {
+                    warnings += 1;
+                }
+            }
+        }
+        assert_eq!(warnings, 0, "normal traffic must not raise early warnings");
+        assert!(!anomaly.learning, "trained after 13 chunks");
+        assert!(anomaly.status().risk_score < 50, "risk stays low: {}", anomaly.status().risk_score);
     }
 
     #[test]

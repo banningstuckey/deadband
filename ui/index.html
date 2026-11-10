@@ -46,7 +46,7 @@
     <main>
       <div class="page-head">
         <headline medium id="page-title">Live map</headline>
-        <span class="phase-tag">Phase 4 — rules layer</span>
+        <span class="phase-tag">Phase 5 — anomaly early warning</span>
       </div>
 
       <section id="view-live" class="view">
@@ -172,6 +172,18 @@
           feed, or immediately when the store already holds history. Absolute rules
           (new device, IT-to-controller, non-HMI write, threat intel) fire from the
           first packet. Alerts appear in the Events log and flash on the map.</p>
+        </nmui-card>
+
+        <nmui-card outlined>
+          <h2 class="card-title">Early warning — layer 2 (statistical)</h2>
+          <p id="anomaly-status" class="sim-status">Contacting the anomaly layer…</p>
+          <ul id="anomaly-factors" class="rules-list"></ul>
+          <p class="dim">How it works: traffic is scored in 30-second chunks against a
+          learned baseline — who talks to whom, which commands each device uses, who
+          writes, how much traffic is normal. Odd chunks raise the risk score with the
+          reasons listed; at 50+ an early-warning alert fires. It exists to catch the
+          snooping phase, before anything destructive happens. While it says
+          "learning", alerts are held back on purpose.</p>
         </nmui-card>
 
         <nmui-card outlined>
@@ -344,6 +356,27 @@
   setInterval(refreshReplayStatus, 1000);
 
   // ---- rules + scenarios --------------------------------------------------
+  const anomalyStatusEl = document.getElementById('anomaly-status');
+  const anomalyFactorsEl = document.getElementById('anomaly-factors');
+
+  async function loadAnomaly() {
+    if (!invoke) return;
+    try {
+      const a = await invoke('anomaly_status');
+      anomalyStatusEl.textContent =
+        'Plant risk score: ' + a.risk_score + ' · ' +
+        (a.learning ? 'LEARNING (alerts held back)' : 'ARMED') +
+        ' · ' + a.chunks_scored + ' chunks scored' +
+        (a.last_alert_title ? ' · last warning: ' + a.last_alert_title : '');
+      anomalyFactorsEl.replaceChildren();
+      a.last_factors.forEach((f) => {
+        const li = document.createElement('li');
+        li.textContent = f[0] + ' (+' + f[1] + ')';
+        anomalyFactorsEl.appendChild(li);
+      });
+    } catch (err) { /* anomaly card is best-effort */ }
+  }
+
   const rulesStatusEl = document.getElementById('rules-status');
   const rulesListEl = document.getElementById('rules-list');
   const scenarioListEl = document.getElementById('scenario-list');
@@ -389,7 +422,8 @@
     } catch (err) { /* rules view is best-effort */ }
   }
   loadRules();
-  setInterval(loadRules, 5000);
+  loadAnomaly();
+  setInterval(() => { loadRules(); loadAnomaly(); }, 5000);
 
   (async () => {
     if (!invoke) return;

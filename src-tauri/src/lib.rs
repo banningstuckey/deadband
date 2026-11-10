@@ -20,6 +20,53 @@ struct AppState {
     running: Arc<AtomicBool>,
     replay_running: Arc<AtomicBool>,
     replay_info: Arc<Mutex<ReplayInfo>>,
+    anomaly_shared: Arc<Mutex<AnomalyStatusDto>>,
+}
+
+/// The anomaly layer's status, mirrored from whichever feed thread
+/// is running so the Rules view can poll it.
+#[derive(Debug, Clone, Serialize)]
+struct AnomalyStatusDto {
+    learning: bool,
+    risk_score: i32,
+    chunks_scored: usize,
+    last_factors: Vec<(String, i32)>,
+    last_alert_title: Option<String>,
+}
+
+impl Default for AnomalyStatusDto {
+    fn default() -> AnomalyStatusDto {
+        AnomalyStatusDto {
+            learning: true,
+            risk_score: 0,
+            chunks_scored: 0,
+            last_factors: Vec::new(),
+            last_alert_title: None,
+        }
+    }
+}
+
+/// Publishes a feed thread's anomaly status for the UI.
+fn publish_anomaly(
+    shared: &Arc<Mutex<AnomalyStatusDto>>,
+    layer: &deadband_core::detect::AnomalyLayer,
+) {
+    let status = layer.status();
+    if let Ok(mut dto) = shared.lock() {
+        *dto = AnomalyStatusDto {
+            learning: status.learning,
+            risk_score: status.risk_score,
+            chunks_scored: status.chunks_scored,
+            last_factors: status.last_factors,
+            last_alert_title: status.last_alert_title,
+        };
+    }
+}
+
+/// The anomaly layer's current status (Rules view polls this).
+#[tauri::command]
+fn anomaly_status(state: tauri::State<AppState>) -> AnomalyStatusDto {
+    state.anomaly_shared.lock().map(|dto| dto.clone()).unwrap_or_default()
 }
 
 /// Bookkeeping for the capture replay, for the UI's status line.
@@ -135,11 +182,16 @@ fn start_simulation(app: tauri::AppHandle, state: tauri::State<AppState>) -> Sim
     }
     let store = Arc::clone(&state.store);
     let running = Arc::clone(&state.running);
+    let anomaly_shared = Arc::clone(&state.anomaly_shared);
     std::thread::spawn(move || {
         let mut source = SimulatedSource::new(now_ms());
         let mut rules = match store.lock() {
             Ok(store) => deadband_core::detect::RulesLayer::from_store(&store),
             Err(_) => deadband_core::detect::RulesLayer::new(),
+        };
+        let mut anomaly = match store.lock() {
+            Ok(store) => deadband_core::detect::AnomalyLayer::from_store(&store),
+            Err(_) => deadband_core::detect::AnomalyLayer::new(),
         };
         while running.load(Ordering::Relaxed) {
             for _ in 0..6 {
@@ -148,11 +200,12 @@ fn start_simulation(app: tauri::AppHandle, state: tauri::State<AppState>) -> Sim
                 }
                 if let Some(packet) = source.next_packet() {
                     let events = match store.lock() {
-                        Ok(store) => deadband_core::engine::process_packet_with_rules(
-                            &store, &packet, &mut rules,
+                        Ok(store) => deadband_core::engine::process_packet_full(
+                            &store, &packet, &mut rules, &mut anomaly,
                         ),
                         Err(_) => Vec::new(),
                     };
+                    publish_anomaly(&anomaly_shared, &anomaly);
                     for event in &events {
                         let _ = app.emit("traffic", EventDto::from(event));
                     }
@@ -256,10 +309,15 @@ fn start_replay(
     let store = Arc::clone(&state.store);
     let running = Arc::clone(&state.replay_running);
     let info_handle = Arc::clone(&state.replay_info);
+    let anomaly_shared = Arc::clone(&state.anomaly_shared);
     std::thread::spawn(move || {
         let mut rules = match store.lock() {
             Ok(store) => deadband_core::detect::RulesLayer::from_store(&store),
             Err(_) => deadband_core::detect::RulesLayer::new(),
+        };
+        let mut anomaly = match store.lock() {
+            Ok(store) => deadband_core::detect::AnomalyLayer::from_store(&store),
+            Err(_) => deadband_core::detect::AnomalyLayer::new(),
         };
         let mut previous_ts: Option<i64> = None;
         for (index, packet) in packets.iter().enumerate() {
@@ -279,11 +337,12 @@ fn start_replay(
                 data: packet.data.clone(),
             };
             let events = match store.lock() {
-                Ok(store) => deadband_core::engine::process_packet_with_rules(
-                    &store, &shifted, &mut rules,
+                Ok(store) => deadband_core::engine::process_packet_full(
+                    &store, &shifted, &mut rules, &mut anomaly,
                 ),
                 Err(_) => Vec::new(),
             };
+            publish_anomaly(&anomaly_shared, &anomaly);
             for event in &events {
                 let _ = app.emit("traffic", EventDto::from(event));
             }
@@ -376,10 +435,15 @@ fn run_scenario(app: tauri::AppHandle, state: tauri::State<AppState>, name: Stri
         return false;
     };
     let store = Arc::clone(&state.store);
+    let anomaly_shared = Arc::clone(&state.anomaly_shared);
     std::thread::spawn(move || {
         let mut rules = match store.lock() {
             Ok(store) => deadband_core::detect::RulesLayer::from_store(&store),
             Err(_) => deadband_core::detect::RulesLayer::new(),
+        };
+        let mut anomaly = match store.lock() {
+            Ok(store) => deadband_core::detect::AnomalyLayer::from_store(&store),
+            Err(_) => deadband_core::detect::AnomalyLayer::new(),
         };
         let mut previous_ts: Option<i64> = None;
         for packet in &packets {
@@ -391,11 +455,12 @@ fn run_scenario(app: tauri::AppHandle, state: tauri::State<AppState>, name: Stri
             }
             previous_ts = Some(packet.timestamp_ms);
             let events = match store.lock() {
-                Ok(store) => deadband_core::engine::process_packet_with_rules(
-                    &store, packet, &mut rules,
+                Ok(store) => deadband_core::engine::process_packet_full(
+                    &store, packet, &mut rules, &mut anomaly,
                 ),
                 Err(_) => Vec::new(),
             };
+            publish_anomaly(&anomaly_shared, &anomaly);
             for event in &events {
                 let _ = app.emit("traffic", EventDto::from(event));
             }
@@ -525,6 +590,7 @@ pub fn run() {
                 running: Arc::new(AtomicBool::new(false)),
                 replay_running: Arc::new(AtomicBool::new(false)),
                 replay_info: Arc::new(Mutex::new(ReplayInfo::default())),
+                anomaly_shared: Arc::new(Mutex::new(AnomalyStatusDto::default())),
             });
             Ok(())
         })
@@ -540,7 +606,8 @@ pub fn run() {
             stop_replay,
             replay_status,
             rules_status,
-            run_scenario
+            run_scenario,
+            anomaly_status
         ])
         .run(tauri::generate_context!())
         .expect("error while running Deadband");

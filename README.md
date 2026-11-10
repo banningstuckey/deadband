@@ -10,15 +10,17 @@ phase, before anything destructive happens. It is built for the plants that
 can't afford enterprise OT security platforms: small utilities, water
 systems, and factories.
 
-> **Status: Phase 4 — rules layer.** The app ships a built-in lab
-> (five virtual devices generating real Modbus/TCP frames), the live
-> Purdue map, and PCAP replay with passive discovery — and now the
-> first detection layer is live: seven hard rules evaluated on every
-> packet (new device, IT-to-controller, writes from a non-HMI, new
-> level crossings, threat-intel matches, rate spikes, writes outside
-> the learned pattern), with one-click lab attack scenarios in the
-> Rules view to prove they fire — and a test suite that proves normal
-> traffic never does. The anomaly early-warning layer is next.
+> **Status: Phase 5 — anomaly early warning.** The app ships a
+> built-in lab (five virtual devices generating real Modbus/TCP
+> frames), the live Purdue map, PCAP replay with passive discovery,
+> and two detection layers: seven hard rules evaluated per packet,
+> and a statistical early-warning layer that learns a baseline of
+> normal (peers, functions, writers, volumes) and scores traffic in
+> 30-second chunks — with the contributing factors always shown. A
+> "slow recon" lab scenario (probing only, nothing destructive)
+> proves the point: the rules only note a new device while the
+> anomaly layer raises the early warning. An optional local-LLM
+> analyst layer is next.
 
 ## Brand assets
 

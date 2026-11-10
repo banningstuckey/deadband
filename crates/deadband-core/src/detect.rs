@@ -469,25 +469,350 @@ impl DetectionLayer for RulesLayer {
     }
 }
 
-/// Layer 2 — statistical anomaly detection / early warning.
+/// Layer 2 — statistical anomaly detection / early warning (Phase 5).
 ///
-/// Phase 5 implements: per-device and per-pair baselines (peers,
-/// protocols, function codes, volumes, timing), chunk scoring, and a
-/// per-device / per-plant risk score with contributing factors.
-#[derive(Debug, Default)]
+/// This is the layer Banning asked for by name at the start: *analyze
+/// chunks of traffic and warn early, while an attacker is still
+/// snooping.* It is statistics, not magic:
+///
+/// - Traffic is aggregated into [`CHUNK_S`]-second **chunks**.
+/// - A **baseline** of normal is learned: who talks to whom (peers),
+///   who writes, which Modbus functions each device uses, and how
+///   much traffic each device normally makes per chunk.
+/// - Each closed chunk is **scored** against the baseline with named,
+///   weighted factors (new peer +25, never-seen function +20, write
+///   from a device that never writes +25, …). A chunk scoring
+///   ≥ [`ALERT_THRESHOLD`] raises an early-warning alert whose factors
+///   are its receipts.
+/// - The plant **risk score** is the latest chunk's score, decaying
+///   ×0.7 per quiet chunk — a number that breathes instead of latching.
+///
+/// **Learning.** Peer/writer/device baselines seed from store history
+/// (like the rules layer) and fold after every chunk. Function and
+/// volume baselines need live chunks: until [`LEARN_CHUNKS`] chunks
+/// have folded they are *excluded from alert scores* (they still show
+/// in the status factors), and until the layer is trained — seeded
+/// from ≥300 stored events or [`LEARN_CHUNKS`] live chunks — no
+/// alerts fire at all. Function/volume baselines freeze once trained,
+/// so a slow-ramping attacker cannot teach the layer that flooding
+/// is normal. This layer, like the others, warns and never acts.
+#[derive(Debug)]
 pub struct AnomalyLayer {
-    /// True while the layer is still learning the baseline. Early
-    /// warnings during learning are labelled as such in the UI rather
-    /// than hidden — false positives are expected and named.
+    /// True while the layer is still learning (alerts suppressed).
     pub learning: bool,
     /// Current plant-wide risk score, 0 (normal) and up.
     pub risk_score: i32,
+    /// device → peers it normally talks to.
+    peers: std::collections::HashMap<IpAddr, std::collections::HashSet<IpAddr>>,
+    /// Devices that ever write (Modbus) in the baseline.
+    writers: std::collections::HashSet<IpAddr>,
+    /// Devices present in the baseline.
+    known_devices: std::collections::HashSet<IpAddr>,
+    /// device → Modbus function codes it normally uses as a client.
+    functions: std::collections::HashMap<IpAddr, std::collections::HashSet<u8>>,
+    /// device → per-chunk packet counts seen during learning.
+    volume_history: std::collections::HashMap<IpAddr, Vec<usize>>,
+    /// True when function/volume baselines are complete and frozen.
+    functions_frozen: bool,
+    /// Chunks folded by this instance.
+    chunks_folded: usize,
+    /// Chunks scored (closed) by this instance.
+    chunks_scored: usize,
+    /// The open chunk being accumulated, if any.
+    chunk: Option<ChunkAccum>,
+    /// Factors of the most recently scored chunk (status display).
+    last_factors: Vec<(String, i32)>,
+    /// Title of the most recent early-warning alert, if any.
+    last_alert_title: Option<String>,
+}
+
+/// Chunk length, in seconds of *capture* time.
+pub const CHUNK_S: i64 = 30;
+/// Live chunks that complete function/volume learning.
+pub const LEARN_CHUNKS: usize = 6;
+/// Chunk score at/above which an early warning fires.
+pub const ALERT_THRESHOLD: i32 = 50;
+
+/// Per-source aggregation inside one chunk.
+#[derive(Debug, Default)]
+struct SrcChunk {
+    count: usize,
+    peers: std::collections::HashSet<IpAddr>,
+    functions: std::collections::HashSet<u8>,
+    wrote: bool,
+}
+
+/// One open chunk of traffic being aggregated.
+#[derive(Debug)]
+struct ChunkAccum {
+    start_ts: i64,
+    per_src: std::collections::HashMap<IpAddr, SrcChunk>,
+    new_devices: std::collections::HashSet<IpAddr>,
+}
+
+/// A snapshot of the anomaly layer for status displays.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AnomalyStatus {
+    /// Still learning (alerts suppressed).
+    pub learning: bool,
+    /// Current plant risk score.
+    pub risk_score: i32,
+    /// Chunks scored so far.
+    pub chunks_scored: usize,
+    /// Factors behind the most recent chunk score.
+    pub last_factors: Vec<(String, i32)>,
+    /// Most recent early-warning alert title, if any.
+    pub last_alert_title: Option<String>,
+}
+
+impl Default for AnomalyLayer {
+    fn default() -> AnomalyLayer {
+        AnomalyLayer::new()
+    }
 }
 
 impl AnomalyLayer {
-    /// Creates an anomaly layer in learning mode with a zero score.
+    /// Creates an anomaly layer with an empty baseline, in learning mode.
     pub fn new() -> AnomalyLayer {
-        AnomalyLayer { learning: true, risk_score: 0 }
+        AnomalyLayer {
+            learning: true,
+            risk_score: 0,
+            peers: Default::default(),
+            writers: Default::default(),
+            known_devices: Default::default(),
+            functions: Default::default(),
+            volume_history: Default::default(),
+            functions_frozen: false,
+            chunks_folded: 0,
+            chunks_scored: 0,
+            chunk: None,
+            last_factors: Vec::new(),
+            last_alert_title: None,
+        }
+    }
+
+    /// An anomaly layer whose peer/writer/device baselines are seeded
+    /// from the store's history; with ≥[`BASELINE_EVENTS`] stored
+    /// events it starts trained (function/volume factors still join
+    /// alert scores only after live learning chunks freeze them).
+    pub fn from_store(store: &crate::store::Store) -> AnomalyLayer {
+        let mut layer = AnomalyLayer::new();
+        if let Ok(devices) = store.list_devices() {
+            layer.known_devices = devices.iter().map(|d| d.ip).collect();
+        }
+        if let Ok(connections) = store.list_connections() {
+            for conn in &connections {
+                layer.peers.entry(conn.src_ip).or_default().insert(conn.dst_ip);
+                layer.peers.entry(conn.dst_ip).or_default().insert(conn.src_ip);
+            }
+        }
+        if let Ok(pairs) = store.write_pairs() {
+            layer.writers = pairs.iter().map(|(writer, _)| *writer).collect();
+        }
+        if store.event_count().unwrap_or(0) >= BASELINE_EVENTS {
+            layer.learning = false;
+        }
+        layer
+    }
+
+    /// Status snapshot for the UI.
+    pub fn status(&self) -> AnomalyStatus {
+        AnomalyStatus {
+            learning: self.learning,
+            risk_score: self.risk_score,
+            chunks_scored: self.chunks_scored,
+            last_factors: self.last_factors.clone(),
+            last_alert_title: self.last_alert_title.clone(),
+        }
+    }
+
+    /// Feeds one packet (already processed by the pipeline) into the
+    /// current chunk. When the packet's timestamp closes the chunk,
+    /// the chunk is scored and an early-warning alert may be returned.
+    pub fn observe_packet(
+        &mut self,
+        _store: &crate::store::Store,
+        packet: &crate::source::Packet,
+        packet_events: &[Event],
+    ) -> Vec<Alert> {
+        let parsed = match crate::parse::parse_packet(packet) {
+            Ok(parsed) => parsed,
+            Err(_) => return Vec::new(),
+        };
+        let ts = parsed.timestamp_ms / 1000;
+        let mut out = Vec::new();
+        if let Some(chunk) = &self.chunk {
+            if ts >= chunk.start_ts + CHUNK_S {
+                let closed = self.chunk.take().expect("checked above");
+                out.extend(self.close_chunk(closed));
+            }
+        }
+        if self.chunk.is_none() {
+            self.chunk = Some(ChunkAccum {
+                start_ts: ts,
+                per_src: Default::default(),
+                new_devices: Default::default(),
+            });
+        }
+        let chunk = self.chunk.as_mut().expect("just set");
+        for event in packet_events {
+            if event.kind == EventKind::DeviceDiscovered {
+                if let Some(ip) = event.src_ip {
+                    chunk.new_devices.insert(ip);
+                }
+            }
+        }
+        if let (Some(src), Some(dst)) = (parsed.src_ip, parsed.dst_ip) {
+            let entry = chunk.per_src.entry(src).or_default();
+            entry.count += 1;
+            entry.peers.insert(dst);
+            if let Some(mb) = parsed.modbus {
+                if !mb.is_response {
+                    entry.functions.insert(mb.function_code);
+                    if mb.is_write {
+                        entry.wrote = true;
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    /// Scores a closed chunk against the baseline, folds it into the
+    /// baseline (subject to the freeze rules), and returns an
+    /// early-warning alert when the alert score clears the threshold.
+    fn close_chunk(&mut self, chunk: ChunkAccum) -> Vec<Alert> {
+        self.chunks_scored += 1;
+        let mut best: Option<(IpAddr, i32, i32, Vec<(String, i32)>)> = None;
+        for (src, agg) in &chunk.per_src {
+            let mut display = 0i32;
+            let mut alert_score = 0i32;
+            let mut factors: Vec<(String, i32)> = Vec::new();
+            // New peers.
+            let baseline_peers = self.peers.get(src);
+            let new_peers: Vec<IpAddr> = agg
+                .peers
+                .iter()
+                .filter(|peer| !baseline_peers.map(|set| set.contains(peer)).unwrap_or(false))
+                .copied()
+                .collect();
+            if !new_peers.is_empty() {
+                let w = (25 * new_peers.len() as i32).min(50);
+                display += w;
+                alert_score += w;
+                for peer in &new_peers {
+                    factors.push((format!("new peer {peer}"), w / new_peers.len() as i32));
+                }
+            }
+            // A device the baseline has never contained.
+            if !self.known_devices.contains(src) {
+                display += 20;
+                alert_score += 20;
+                factors.push(("device not in baseline".to_string(), 20));
+            }
+            // Never-seen functions (alert-counting only once frozen).
+            let baseline_functions = self.functions.get(src);
+            let new_functions: Vec<u8> = agg
+                .functions
+                .iter()
+                .filter(|fc| !baseline_functions.map(|set| set.contains(fc)).unwrap_or(false))
+                .copied()
+                .collect();
+            if !new_functions.is_empty() {
+                let w = (20 * new_functions.len() as i32).min(40);
+                display += w;
+                if self.functions_frozen {
+                    alert_score += w;
+                }
+                for fc in &new_functions {
+                    factors.push((format!("never-seen function {fc}"), w / new_functions.len() as i32));
+                }
+            }
+            // A write from a device that never writes.
+            if agg.wrote && !self.writers.contains(src) {
+                display += 25;
+                alert_score += 25;
+                factors.push(("write from a device that never writes".to_string(), 25));
+            }
+            // Volume vs the learned per-chunk mean (frozen track only).
+            if self.functions_frozen {
+                if let Some(history) = self.volume_history.get(src) {
+                    if history.len() >= 3 {
+                        let mean = history.iter().sum::<usize>() as f64 / history.len() as f64;
+                        let count = agg.count as f64;
+                        let w = if count > mean * 6.0 + 20.0 {
+                            30
+                        } else if count > mean * 3.0 + 10.0 {
+                            15
+                        } else {
+                            0
+                        };
+                        if w > 0 {
+                            display += w;
+                            alert_score += w;
+                            factors.push((format!("volume {:.0} vs normal {:.0}/chunk", count, mean), w));
+                        }
+                    }
+                }
+            }
+            let better = match &best {
+                Some((_, best_display, _, _)) => display > *best_display,
+                None => true,
+            };
+            if better {
+                best = Some((*src, display, alert_score, factors));
+            }
+        }
+
+        let mut out = Vec::new();
+        if let Some((src, display, alert_score, factors)) = best {
+            self.last_factors = factors.clone();
+            self.risk_score = if display >= self.risk_score {
+                display
+            } else {
+                (self.risk_score as f64 * 0.7) as i32
+            };
+            if !self.learning && alert_score >= ALERT_THRESHOLD {
+                let alert = Alert {
+                    timestamp: chunk.start_ts,
+                    layer: "anomaly",
+                    severity: if alert_score >= 80 { Severity::High } else { Severity::Medium },
+                    title: format!(
+                        "[early-warning] Unusual traffic from {src} (score {alert_score})"
+                    ),
+                    detail: "This chunk of traffic does not match the learned baseline. \
+                             Early warning means 'look now', not 'attack confirmed' — \
+                             this is the shape of reconnaissance, before anything destructive."
+                        .to_string(),
+                    device_ip: Some(src),
+                    factors,
+                };
+                self.last_alert_title = Some(alert.title.clone());
+                out.push(alert);
+            }
+        } else {
+            self.risk_score = (self.risk_score as f64 * 0.7) as i32;
+        }
+
+        // Fold the chunk into the baseline. Peers/writers/devices
+        // always fold; functions/volumes fold only until they freeze.
+        for (src, agg) in &chunk.per_src {
+            self.peers.entry(*src).or_default().extend(agg.peers.iter().copied());
+            if agg.wrote {
+                self.writers.insert(*src);
+            }
+            self.known_devices.insert(*src);
+            if !self.functions_frozen {
+                self.functions.entry(*src).or_default().extend(agg.functions.iter().copied());
+                self.volume_history.entry(*src).or_default().push(agg.count);
+            }
+        }
+        self.chunks_folded += 1;
+        if self.chunks_folded >= LEARN_CHUNKS {
+            self.functions_frozen = true;
+            self.learning = false;
+        }
+        out
     }
 }
 
@@ -497,7 +822,8 @@ impl DetectionLayer for AnomalyLayer {
     }
 
     fn evaluate(&mut self, _events: &[Event]) -> Vec<Alert> {
-        // Phase 5: score the chunk against the baseline.
+        // The anomaly layer evaluates packets into chunks
+        // (observe_packet), not event batches.
         Vec::new()
     }
 }

@@ -51,6 +51,14 @@ pub fn catalog() -> Vec<ScenarioInfo> {
             blurb: "An unknown device (10.0.9.99) interrogates every plant device, fast. \
                     Should trip: new device, traffic rate spike.",
         },
+        ScenarioInfo {
+            id: "slow-recon",
+            title: "Slow recon (probing only)",
+            blurb: "An unknown device (10.0.9.55) quietly probes with unusual function codes \
+                    over ~90 seconds — no writes, nothing destructive. The rules only note a \
+                    new device; the anomaly layer's early warning is built to catch this. \
+                    Works best after the plant has run a few minutes (baseline trained).",
+        },
     ]
 }
 
@@ -68,8 +76,16 @@ const SWEEPER: PlantDevice = PlantDevice {
     role: crate::model::DeviceRole::Unknown,
     label: "Sweeper",
 };
+const PROBER: PlantDevice = PlantDevice {
+    ip: [10, 0, 9, 55],
+    mac: "02:db:00:00:09:37",
+    level: crate::model::PurdueLevel::Supervisory,
+    role: crate::model::DeviceRole::Unknown,
+    label: "Prober",
+};
 const LAPTOP_PORT: u16 = 40077;
 const SWEEPER_PORT: u16 = 40099;
+const PROBER_PORT: u16 = 40055;
 const OFFICE_PORT: u16 = 51000;
 
 fn modbus_adu(transaction: u16, unit: u8, pdu: &[u8]) -> Vec<u8> {
@@ -174,6 +190,46 @@ fn packets_recon_sweep(base_ms: i64) -> Vec<Packet> {
     out
 }
 
+fn read_pair_fc(
+    out: &mut Vec<Packet>,
+    base_ms: i64,
+    at_ms: i64,
+    client: PlantDevice,
+    client_port: u16,
+    server: PlantDevice,
+    function: u8,
+    seq: u32,
+) {
+    out.push(Packet {
+        timestamp_ms: base_ms + at_ms,
+        data: build_modbus_read(client.mac, server.mac, client.ip, server.ip, client_port, 1, function, 0, 4, seq),
+    });
+    out.push(Packet {
+        timestamp_ms: base_ms + at_ms + 12,
+        data: build_modbus_read_response(
+            server.mac, client.mac, server.ip, client.ip, client_port, 1, function, &[5, 6, 7, 8], seq + 1,
+        ),
+    });
+}
+
+fn packets_slow_recon(base_ms: i64) -> Vec<Packet> {
+    // Probing only: varied read functions, two controllers, long
+    // pauses, one ordinary-looking web request. Nothing writes.
+    let mut out = Vec::new();
+    read_pair_fc(&mut out, base_ms, 0, PROBER, PROBER_PORT, PLC1, 1, 9500);
+    read_pair_fc(&mut out, base_ms, 20_000, PROBER, PROBER_PORT, PLC2, 2, 9502);
+    read_pair_fc(&mut out, base_ms, 45_000, PROBER, PROBER_PORT, PLC1, 4, 9504);
+    read_pair_fc(&mut out, base_ms, 70_000, PROBER, PROBER_PORT, PLC2, 1, 9506);
+    out.push(Packet {
+        timestamp_ms: base_ms + 95_000,
+        data: build_tcp_frame(
+            PROBER.mac, HISTORIAN.mac, PROBER.ip, HISTORIAN.ip, PROBER_PORT, 443,
+            b"GET / HTTP/1.0\r\n\r\n", 9508,
+        ),
+    });
+    out
+}
+
 /// The packet script for a scenario id, or `None` for an unknown id.
 /// Timestamps start at `base_ms` (the shell passes "now").
 pub fn packets(name: &str, base_ms: i64) -> Option<Vec<Packet>> {
@@ -181,6 +237,7 @@ pub fn packets(name: &str, base_ms: i64) -> Option<Vec<Packet>> {
         "rogue-laptop" => Some(packets_rogue_laptop(base_ms)),
         "office-reachdown" => Some(packets_office_reachdown(base_ms)),
         "recon-sweep" => Some(packets_recon_sweep(base_ms)),
+        "slow-recon" => Some(packets_slow_recon(base_ms)),
         _ => None,
     }
 }
@@ -258,6 +315,50 @@ mod tests {
     #[test]
     fn unknown_scenario_is_none() {
         assert!(packets("nonsense", 0).is_none());
-        assert_eq!(catalog().len(), 3);
+        assert_eq!(catalog().len(), 4);
+    }
+
+    #[test]
+    fn slow_recon_trips_only_the_anomaly_layer() {
+        // The Phase 5 done-when: probing with no destructive action
+        // raises an early warning, while no hard rule beyond the
+        // informational new-device note fires.
+        let store = store_with_history();
+        // Train the anomaly layer on normal traffic first, as a
+        // running monitor would be trained.
+        {
+            let mut rules = RulesLayer::from_store(&store);
+            let mut anomaly = crate::detect::AnomalyLayer::from_store(&store);
+            let mut source = SimulatedSource::new(1_700_000_100_000);
+            for _ in 0..1300 {
+                let packet = source.next_packet().unwrap();
+                let events = engine::process_packet_full(&store, &packet, &mut rules, &mut anomaly);
+                assert!(
+                    !events.iter().any(|e| e.summary.contains("[early-warning]")),
+                    "training traffic must not warn"
+                );
+            }
+            assert!(!anomaly.learning, "layer trained after enough chunks");
+        }
+        // Fresh layers, as the app's scenario thread constructs them.
+        let mut rules = RulesLayer::from_store(&store);
+        let mut anomaly = crate::detect::AnomalyLayer::from_store(&store);
+        let mut saw_warning = false;
+        for packet in packets("slow-recon", 1_700_000_400_000).unwrap() {
+            for event in engine::process_packet_full(&store, &packet, &mut rules, &mut anomaly) {
+                if event.kind == EventKind::AlertRaised {
+                    if event.summary.contains("[early-warning]") {
+                        saw_warning = true;
+                    } else {
+                        assert!(
+                            event.summary.contains("[new-device]"),
+                            "only the new-device note may accompany the warning: {}",
+                            event.summary
+                        );
+                    }
+                }
+            }
+        }
+        assert!(saw_warning, "the probing must raise an early warning");
     }
 }
