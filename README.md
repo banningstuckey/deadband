@@ -19,6 +19,14 @@ systems, and factories.
 > Wireshark work, all through the same pipeline. Detection lands
 > phase by phase; see the architecture below.
 
+## Brand assets
+
+The Deadband logo (shield mark + wordmark) appears on the app's splash
+screen from `ui/assets/deadband-logo.jpg`; the app icons in
+`src-tauri/icons/` are the shield mark cropped from the same artwork.
+These are binary files, so they travel outside the text-only sync —
+if they are missing, the app still runs (the splash skips itself).
+
 ## Safety rules (non-negotiable)
 
 These are design constraints, not settings:

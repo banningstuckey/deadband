@@ -24,6 +24,11 @@
 </script>
 </head>
 <body>
+  <div id="splash" role="img" aria-label="Deadband">
+    <img id="splash-logo" src="./assets/deadband-logo.jpg" alt="Deadband"
+         onerror="var s=document.getElementById('splash'); if(s) s.remove();">
+    <p class="splash-sub">Real-time passive OT network monitor</p>
+  </div>
   <div class="shell">
     <nmui-navigation rail expanded id="rail">
       <header>
@@ -194,6 +199,24 @@
   }
   document.getElementById('recheck').addEventListener('click', checkEngine);
   checkEngine();
+
+  // ---- splash -----------------------------------------------------------
+  // Shows the logo while the app boots, then fades. Failsafes: a click
+  // dismisses it, and it removes itself after 3 s no matter what — the
+  // splash must never trap the user out of the app. If the logo asset
+  // has not been dropped into ui/assets/ yet, the img's onerror removes
+  // the splash instantly instead.
+  const splashEl = document.getElementById('splash');
+  function hideSplash() {
+    if (!splashEl || !splashEl.isConnected) return;
+    splashEl.classList.add('done');
+    setTimeout(() => splashEl.remove(), 550);
+  }
+  if (splashEl) {
+    splashEl.addEventListener('click', hideSplash);
+    window.addEventListener('load', () => setTimeout(hideSplash, 1000));
+    setTimeout(hideSplash, 3000);
+  }
 
   // ---- view switching -------------------------------------------------
   const titles = { live: 'Live map', events: 'Events', assets: 'Assets', rules: 'Rules', settings: 'Settings' };
