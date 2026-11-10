@@ -89,3 +89,50 @@ footer.note { color: var(--md-sys-color-on-surface-variant); font-size: 12px; }
 .log-row.kind-write { border-left-color: var(--md-sys-color-tertiary); background: color-mix(in srgb, var(--md-sys-color-tertiary) 8%, transparent); }
 .log-row.kind-discovery, .log-row.kind-connection { border-left-color: var(--md-sys-color-secondary); }
 .log-row.kind-alert { border-left-color: var(--md-sys-color-error); }
+
+/* Purdue map */
+.map-scroll { overflow-x: auto; }
+#purdue-map { width: 100%; min-width: 700px; display: block; }
+#purdue-map .band { fill: var(--md-sys-color-surface-container-low); }
+#purdue-map .band-dmz {
+  fill: color-mix(in srgb, var(--md-sys-color-tertiary) 7%, var(--md-sys-color-surface-container-low));
+  stroke: var(--md-sys-color-tertiary);
+  stroke-width: 1.2;
+  stroke-dasharray: 7 5;
+}
+#purdue-map .band-unclass { fill: var(--md-sys-color-surface-container); }
+#purdue-map text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+#purdue-map .t-level { font-size: 15px; font-weight: 700; fill: var(--md-sys-color-on-surface); letter-spacing: 0.04em; }
+#purdue-map .t-name { font-size: 11.5px; fill: var(--md-sys-color-on-surface-variant); }
+#purdue-map .t-dmz { font-size: 10px; letter-spacing: 0.16em; fill: var(--md-sys-color-tertiary); }
+#purdue-map .t-zone { font-size: 11px; letter-spacing: 0.18em; fill: var(--md-sys-color-on-surface-variant); }
+#purdue-map .zone-bracket { stroke: var(--md-sys-color-outline); stroke-width: 1.4; fill: none; }
+#purdue-map .conduit {
+  stroke: var(--md-sys-color-outline);
+  opacity: 0.55;
+  cursor: pointer;
+}
+#purdue-map .conduit:hover { opacity: 1; stroke: var(--md-sys-color-primary); }
+#purdue-map .conduit.pulse { animation: conduitPulse 0.8s ease-out; }
+#purdue-map .conduit.pulse-write { animation: conduitPulseWrite 0.8s ease-out; }
+@keyframes conduitPulse {
+  0% { stroke: var(--md-sys-color-primary); opacity: 1; filter: drop-shadow(0 0 5px var(--md-sys-color-primary)); }
+  100% { filter: none; }
+}
+@keyframes conduitPulseWrite {
+  0% { stroke: var(--md-sys-color-tertiary); opacity: 1; filter: drop-shadow(0 0 5px var(--md-sys-color-tertiary)); }
+  100% { filter: none; }
+}
+#purdue-map .node { cursor: pointer; }
+#purdue-map .node rect {
+  fill: var(--md-sys-color-surface-container-high);
+  stroke: var(--md-sys-color-outline-variant);
+  stroke-width: 1;
+}
+#purdue-map .node:hover rect { stroke: var(--md-sys-color-primary); }
+#purdue-map .node.active rect { stroke: var(--md-sys-color-primary); stroke-width: 2.5; }
+#purdue-map .node text { pointer-events: none; }
+#purdue-map .n-label { font-size: 13px; font-weight: 600; fill: var(--md-sys-color-on-surface); }
+#purdue-map .n-sub { font-size: 10.5px; fill: var(--md-sys-color-on-surface-variant); }
+
+.detail-events { margin: 8px 0 2px; padding-left: 18px; line-height: 1.8; font-size: 13px; }

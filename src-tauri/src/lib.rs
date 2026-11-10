@@ -195,6 +195,65 @@ fn plant_devices() -> Vec<DeviceDto> {
         .collect()
 }
 
+/// One device for the Purdue map, from the live inventory.
+#[derive(Debug, Serialize)]
+struct MapDeviceDto {
+    ip: String,
+    label: Option<String>,
+    role: String,
+    level_label: Option<String>,
+    level_name: Option<String>,
+}
+
+/// One conduit for the Purdue map, from the connection table.
+#[derive(Debug, Serialize)]
+struct MapConnectionDto {
+    src_ip: String,
+    dst_ip: String,
+    dst_port: u16,
+    protocol: String,
+    packet_count: u64,
+}
+
+/// Everything the map draws: inventory + conduits in one call.
+#[derive(Debug, Serialize)]
+struct NetworkSnapshot {
+    devices: Vec<MapDeviceDto>,
+    connections: Vec<MapConnectionDto>,
+}
+
+/// The live network snapshot behind the Purdue map.
+#[tauri::command]
+fn network_snapshot(state: tauri::State<AppState>) -> NetworkSnapshot {
+    let empty = NetworkSnapshot { devices: Vec::new(), connections: Vec::new() };
+    let Ok(store) = state.store.lock() else { return empty };
+    let devices = store
+        .list_devices()
+        .unwrap_or_default()
+        .iter()
+        .map(|d| MapDeviceDto {
+            ip: d.ip.to_string(),
+            label: d.label.clone(),
+            role: d.role.as_tag().to_string(),
+            level_label: d.level.map(|l| l.label().to_string()),
+            level_name: d.level.map(|l| l.name().to_string()),
+        })
+        .collect();
+    let connections = store
+        .list_connections()
+        .unwrap_or_default()
+        .iter()
+        .map(|c| MapConnectionDto {
+            src_ip: c.src_ip.to_string(),
+            dst_ip: c.dst_ip.to_string(),
+            dst_port: c.dst_port,
+            protocol: c.protocol.as_tag().to_string(),
+            packet_count: c.packet_count,
+        })
+        .collect();
+    NetworkSnapshot { devices, connections }
+}
+
 /// Builds and runs the Tauri application.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -222,7 +281,8 @@ pub fn run() {
             stop_simulation,
             simulation_status,
             recent_events,
-            plant_devices
+            plant_devices,
+            network_snapshot
         ])
         .run(tauri::generate_context!())
         .expect("error while running Deadband");

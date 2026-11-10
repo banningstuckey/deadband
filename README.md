@@ -10,11 +10,13 @@ phase, before anything destructive happens. It is built for the plants that
 can't afford enterprise OT security platforms: small utilities, water
 systems, and factories.
 
-> **Status: Phase 1 — simulated plant.** The app ships a built-in lab:
+> **Status: Phase 2 — live Purdue map.** The app ships a built-in lab:
 > five virtual devices (office PC, historian, HMI, two PLCs) generating
 > real Modbus/TCP frames through the real pipeline — parser, SQLite
-> store, live event log in the Events view. Detection lands phase by
-> phase; see the architecture below.
+> store, live event log — and the home screen is now the live Purdue
+> map: devices on their levels, conduits pulsing with traffic, click
+> anything for detail. Detection lands phase by phase; see the
+> architecture below.
 
 ## Safety rules (non-negotiable)
 

@@ -39,10 +39,31 @@
     <main>
       <div class="page-head">
         <headline medium id="page-title">Live map</headline>
-        <span class="phase-tag">Phase 1 — simulated plant</span>
+        <span class="phase-tag">Phase 2 — live Purdue map</span>
       </div>
 
       <section id="view-live" class="view">
+        <nmui-card outlined>
+          <h2 class="card-title">Purdue map — live</h2>
+          <div class="map-scroll">
+            <svg id="purdue-map" viewBox="0 0 1040 872" role="img"
+                 aria-label="Live Purdue Model map of the monitored network"></svg>
+          </div>
+          <p class="dim">Bands are Purdue levels; the dashed band is the IT/OT DMZ.
+          Lines are <strong>conduits</strong> — the observed paths traffic takes between
+          zones — and they pulse as packets flow. Click a device or a conduit for detail.
+          Start the plant from the <strong>Events</strong> view.</p>
+        </nmui-card>
+
+        <nmui-card outlined>
+          <h2 class="card-title" id="detail-title">Detail</h2>
+          <div id="detail-body">
+            <p>Nothing selected. When traffic flows, devices appear on their Purdue
+            level; click one — or a conduit line — to see what it is, who it talks to,
+            and what it has been doing.</p>
+          </div>
+        </nmui-card>
+
         <nmui-card outlined>
           <h2 class="card-title">Engine status</h2>
           <p id="engine-status">Contacting the Rust core…</p>
@@ -56,23 +77,8 @@
         <nmui-card outlined>
           <h2 class="card-title">Simulated plant</h2>
           <p>The built-in lab: five virtual devices generating real Modbus/TCP
-          frames through the same pipeline a live sensor will feed. Start it
-          from the <strong>Events</strong> view and watch the log stream.</p>
+          frames through the same pipeline a live sensor will feed.</p>
           <ul id="plant-list" class="plant-list"></ul>
-        </nmui-card>
-
-        <nmui-card outlined>
-          <h2 class="card-title">Purdue levels (static placeholder)</h2>
-          <p>The live Purdue map arrives in Phase 2. For now, the levels it will draw:</p>
-          <ol class="levels" reversed>
-            <li>Level 5 <span>— Internet</span></li>
-            <li>Level 4 <span>— Enterprise IT</span></li>
-            <li>Level 3.5 <span>— IT/OT DMZ</span></li>
-            <li>Level 3 <span>— Operations</span></li>
-            <li>Level 2 <span>— Supervisory Control</span></li>
-            <li>Level 1 <span>— Basic Control (PLCs, RTUs)</span></li>
-            <li>Level 0 <span>— Physical Process</span></li>
-          </ol>
         </nmui-card>
 
         <nmui-card outlined>
@@ -232,6 +238,227 @@
     }
     refreshStatus();
     setInterval(refreshStatus, 2000);
+  })();
+</script>
+<script>
+  // ---- live Purdue map --------------------------------------------------
+  const LEVELS = [
+    { label: '5', name: 'Internet' },
+    { label: '4', name: 'Enterprise IT' },
+    { label: '3.5', name: 'IT/OT DMZ' },
+    { label: '3', name: 'Operations' },
+    { label: '2', name: 'Supervisory Control' },
+    { label: '1', name: 'Basic Control' },
+    { label: '0', name: 'Physical Process' },
+  ];
+  const BH = 104, GAP = 8, TOP = 8, NODE_W = 184, NODE_H = 50, X0 = 168, XSTEP = 202;
+  const bandY = (i) => TOP + i * (BH + GAP);
+  const UNCLASS_Y = bandY(7) + 8;
+  const svg = document.getElementById('purdue-map');
+  let snapshot = { devices: [], connections: [] };
+  let positions = new Map();
+  let lastSig = '';
+
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const pairKey = (a, b) => [a, b].sort().join('|');
+
+  function snapshotSig(s) {
+    return s.devices.map((d) => d.ip + '@' + d.level_label).join(',') + '|' +
+      s.connections.map((c) => c.src_ip + '>' + c.dst_ip + ':' + c.packet_count).join(',');
+  }
+
+  async function refreshMap() {
+    if (!invoke) return;
+    try {
+      const s = await invoke('network_snapshot');
+      if (snapshotSig(s) !== lastSig) {
+        lastSig = snapshotSig(s);
+        snapshot = s;
+        renderMap();
+      }
+    } catch (err) { /* map refresh is best-effort */ }
+  }
+
+  function renderMap() {
+    const byLevel = new Map(LEVELS.map((l) => [l.label, []]));
+    const unclass = [];
+    snapshot.devices.forEach((d) => {
+      if (d.level_label && byLevel.has(d.level_label)) byLevel.get(d.level_label).push(d);
+      else unclass.push(d);
+    });
+    positions = new Map();
+    let out = '';
+
+    // Level bands + labels.
+    LEVELS.forEach((level, i) => {
+      const y = bandY(i);
+      const isDmz = level.label === '3.5';
+      out += '<rect class="' + (isDmz ? 'band band-dmz' : 'band') + '" x="8" y="' + y +
+        '" width="944" height="' + BH + '" rx="10"></rect>';
+      out += '<text class="t-level" x="24" y="' + (y + 38) + '">LEVEL ' + level.label + '</text>';
+      out += '<text class="t-name" x="24" y="' + (y + 58) + '">' + esc(level.name) + '</text>';
+      if (isDmz) {
+        out += '<text class="t-dmz" x="24" y="' + (y + 78) + '">THE BOUNDARY</text>';
+      }
+    });
+    out += '<rect class="band band-unclass" x="8" y="' + UNCLASS_Y + '" width="944" height="64" rx="10"></rect>';
+    out += '<text class="t-level" x="24" y="' + (UNCLASS_Y + 30) + '">UNPLACED</text>';
+    out += '<text class="t-name" x="24" y="' + (UNCLASS_Y + 48) + '">seen, not yet placed</text>';
+
+    // Zone brackets (IEC 62443 vocabulary, drawn on the map itself).
+    const zones = [
+      { from: 0, to: 1, label: 'IT ZONE' },
+      { from: 2, to: 2, label: 'DMZ' },
+      { from: 3, to: 6, label: 'OT ZONE' },
+    ];
+    zones.forEach((z) => {
+      const y1 = bandY(z.from) + 6, y2 = bandY(z.to) + BH - 6, mid = (y1 + y2) / 2;
+      out += '<path class="zone-bracket" d="M 984 ' + y1 + ' h -8 M 984 ' + y1 + ' V ' + y2 +
+        ' M 984 ' + y2 + ' h -8"></path>';
+      out += '<text class="t-zone" transform="rotate(-90 1000 ' + mid + ')" x="1000" y="' + mid +
+        '" text-anchor="middle">' + z.label + '</text>';
+    });
+
+    // Positions per device.
+    const place = (devices, y) => {
+      devices.forEach((d, idx) => {
+        positions.set(d.ip, { x: X0 + idx * XSTEP, y: y + (BH - NODE_H) / 2, d });
+      });
+    };
+    LEVELS.forEach((level, i) => place(byLevel.get(level.label), bandY(i)));
+    unclass.forEach((d, idx) => {
+      positions.set(d.ip, { x: X0 + idx * XSTEP, y: UNCLASS_Y + 7, d });
+    });
+
+    // Conduits first (nodes paint over their middles).
+    snapshot.connections.forEach((c) => {
+      const a = positions.get(c.src_ip), b = positions.get(c.dst_ip);
+      if (!a || !b) return;
+      const width = Math.min(2 + c.packet_count / 300, 5).toFixed(1);
+      out += '<line class="conduit" data-pair="' + esc(pairKey(c.src_ip, c.dst_ip)) +
+        '" data-a="' + esc(c.src_ip) + '" data-b="' + esc(c.dst_ip) +
+        '" x1="' + (a.x + NODE_W / 2) + '" y1="' + (a.y + NODE_H / 2) +
+        '" x2="' + (b.x + NODE_W / 2) + '" y2="' + (b.y + NODE_H / 2) +
+        '" stroke-width="' + width + '"><title>' +
+        esc(c.src_ip) + ' → ' + esc(c.dst_ip) + ':' + c.dst_port + ' (' +
+        esc(c.protocol) + ', ' + c.packet_count + ' packets)</title></line>';
+    });
+
+    // Device nodes.
+    positions.forEach((pos, ip) => {
+      const d = pos.d;
+      out += '<g class="node" data-ip="' + esc(ip) + '" transform="translate(' + pos.x + ' ' + pos.y + ')">' +
+        '<rect width="' + NODE_W + '" height="' + NODE_H + '" rx="8"></rect>' +
+        '<text class="n-label" x="12" y="21">' + esc(d.label || ip) + '</text>' +
+        '<text class="n-sub" x="12" y="38">' + esc(d.role) + ' · ' + esc(ip) + '</text></g>';
+    });
+
+    if (snapshot.devices.length === 0) {
+      out += '<text class="t-name" x="' + X0 + '" y="' + (bandY(3) + 58) +
+        '">No devices yet — start the simulation (Events view) and the plant will appear here.</text>';
+    }
+    svg.innerHTML = out;
+  }
+
+  // ---- detail panel -----------------------------------------------------
+  const detailTitle = document.getElementById('detail-title');
+  const detailBody = document.getElementById('detail-body');
+
+  function detailList(items) {
+    detailBody.innerHTML = '';
+    if (!items.length) {
+      const p = document.createElement('p');
+      p.className = 'dim';
+      p.textContent = 'No recent events.';
+      detailBody.appendChild(p);
+      return;
+    }
+    const ul = document.createElement('ul');
+    ul.className = 'detail-events';
+    items.forEach((dto) => {
+      const li = document.createElement('li');
+      li.textContent = fmtTime(dto.timestamp) + ' — ' + dto.summary;
+      ul.appendChild(li);
+    });
+    detailBody.appendChild(ul);
+  }
+
+  async function recentFor(filter) {
+    if (!invoke) return [];
+    try {
+      const events = await invoke('recent_events', { limit: 200 });
+      return events.filter(filter).slice(0, 8);
+    } catch (err) { return []; }
+  }
+
+  async function showDevice(ip) {
+    const pos = positions.get(ip);
+    if (!pos) return;
+    const d = pos.d;
+    detailTitle.textContent = 'Device — ' + (d.label || ip);
+    const conns = snapshot.connections.filter((c) => c.src_ip === ip || c.dst_ip === ip);
+    detailBody.innerHTML = '';
+    const p = document.createElement('p');
+    p.textContent = (d.label || ip) + ' · ' + d.role + ' · ' +
+      (d.level_name || 'Purdue level not yet assigned') + ' · ' + ip;
+    detailBody.appendChild(p);
+    if (conns.length) {
+      const cp = document.createElement('p');
+      cp.className = 'dim';
+      cp.textContent = 'Conduits: ' + conns.map((c) =>
+        (c.src_ip === ip ? '→ ' + c.dst_ip : '← ' + c.src_ip) + ':' + c.dst_port +
+        ' (' + c.protocol + ', ' + c.packet_count + ' pkts)').join(' · ');
+      detailBody.appendChild(cp);
+    }
+    detailList(await recentFor((e) => e.src_ip === ip || e.dst_ip === ip));
+  }
+
+  async function showConduit(a, b) {
+    const conn = snapshot.connections.find((c) =>
+      (c.src_ip === a && c.dst_ip === b) || (c.src_ip === b && c.dst_ip === a));
+    detailTitle.textContent = 'Conduit — ' + a + ' ↔ ' + b;
+    detailBody.innerHTML = '';
+    const p = document.createElement('p');
+    p.textContent = conn
+      ? a + ' → ' + b + ':' + conn.dst_port + ' · ' + conn.protocol + ' · ' +
+        conn.packet_count + ' packets observed'
+      : 'No stored connection for this pair yet.';
+    detailBody.appendChild(p);
+    detailList(await recentFor((e) =>
+      (e.src_ip === a && e.dst_ip === b) || (e.src_ip === b && e.dst_ip === a)));
+  }
+
+  svg.addEventListener('click', (e) => {
+    const node = e.target.closest('.node');
+    if (node) { showDevice(node.dataset.ip); return; }
+    const line = e.target.closest('.conduit');
+    if (line) showConduit(line.dataset.a, line.dataset.b);
+  });
+
+  // ---- live pulses ------------------------------------------------------
+  function pulse(dto) {
+    if (!dto.src_ip || !dto.dst_ip) return;
+    const line = svg.querySelector('[data-pair="' + pairKey(dto.src_ip, dto.dst_ip) + '"]');
+    if (line) {
+      line.classList.remove('pulse', 'pulse-write');
+      void line.getBoundingClientRect();
+      line.classList.add(dto.kind === 'write' ? 'pulse-write' : 'pulse');
+    }
+    [dto.src_ip, dto.dst_ip].forEach((ip) => {
+      const node = svg.querySelector('[data-ip="' + ip + '"]');
+      if (node) {
+        node.classList.add('active');
+        setTimeout(() => node.classList.remove('active'), 700);
+      }
+    });
+  }
+
+  (async () => {
+    renderMap();
+    await refreshMap();
+    setInterval(refreshMap, 2500);
+    if (listen) await listen('traffic', (e) => pulse(e.payload));
   })();
 </script>
 </body>

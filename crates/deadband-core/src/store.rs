@@ -244,6 +244,36 @@ impl Store {
         Ok(true)
     }
 
+    /// All stored connections, busiest first (the map's conduits).
+    pub fn list_connections(&self) -> Result<Vec<crate::model::Connection>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, src_ip, dst_ip, dst_port, protocol, first_seen, last_seen,
+                    packet_count, byte_count
+             FROM connections ORDER BY packet_count DESC, id",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            let src_text: String = row.get(1)?;
+            let dst_text: String = row.get(2)?;
+            let protocol_text: String = row.get(4)?;
+            Ok(crate::model::Connection {
+                id: row.get(0)?,
+                src_ip: src_text.parse().unwrap_or_else(|_| std::net::IpAddr::from([127, 0, 0, 1])),
+                dst_ip: dst_text.parse().unwrap_or_else(|_| std::net::IpAddr::from([127, 0, 0, 1])),
+                dst_port: row.get::<_, i64>(3)? as u16,
+                protocol: crate::model::Protocol::from_tag(&protocol_text),
+                first_seen: row.get(5)?,
+                last_seen: row.get(6)?,
+                packet_count: row.get::<_, i64>(7)? as u64,
+                byte_count: row.get::<_, i64>(8)? as u64,
+            })
+        })?;
+        let mut connections = Vec::new();
+        for conn in rows {
+            connections.push(conn?);
+        }
+        Ok(connections)
+    }
+
     /// The most recent events, newest first (the UI's initial backlog).
     /// Kind tags are mapped back lossily — a stored Modbus event keeps
     /// its summary text, which carries the detail the log displays.
@@ -365,6 +395,10 @@ mod tests {
         };
         assert!(store.record_connection(&conn).unwrap(), "first sight inserts");
         assert!(!store.record_connection(&conn).unwrap(), "second sight updates");
+        let listed = store.list_connections().unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].packet_count, 2);
+        assert_eq!(listed[0].protocol, Protocol::ModbusTcp);
         let count: i64 = store
             .conn
             .query_row("SELECT packet_count FROM connections", [], |row| row.get(0))
