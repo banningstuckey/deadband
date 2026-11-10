@@ -67,7 +67,20 @@ main {
   display: grid;
   gap: 16px;
   align-content: start;
-  max-width: 920px;
+}
+
+/* Wide windows: compose views in two columns instead of one narrow
+   stack — the map takes the large share, detail/status sit beside it;
+   Rules pairs its two layer cards; Events pairs its feed cards. */
+@media (min-width: 1500px) {
+  #view-live { grid-template-columns: minmax(0, 7fr) minmax(340px, 4fr); }
+  #view-live .map-card { grid-row: 1 / span 4; align-self: start; }
+  #view-rules { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  #view-rules .scenarios-card { grid-column: 1 / -1; }
+}
+@media (min-width: 1200px) {
+  #view-events { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  #view-events .log-card { grid-column: 1 / -1; }
 }
 
 .page-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
