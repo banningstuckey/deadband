@@ -1,0 +1,18 @@
+# Deadband — Cargo workspace root.
+#
+# Two members:
+#   crates/deadband-core  — the monitoring engine as a standalone library.
+#                           Tauri is only its first shell; a future headless
+#                           Linux sensor reuses this same crate.
+#   src-tauri             — the Tauri 2 desktop application (thin shell).
+[workspace]
+resolver = "2"
+members = ["crates/deadband-core", "src-tauri"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Banning Stuckey"]
+
+[workspace.dependencies]

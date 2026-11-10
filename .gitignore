@@ -1,0 +1,27 @@
+# Rust build artifacts — several GB, created locally on first build.
+# Never commit these; `cargo clean` reclaims the space.
+/target/
+**/target/
+
+# Tauri generated schemas / build output
+src-tauri/gen/
+
+# Node (only if a future tool introduces it — the frontend is plain files)
+node_modules/
+
+# Local databases and captured data — plant data never leaves the machine,
+# and it certainly never goes in the repo.
+*.db
+*.db-journal
+*.db-walsh
+*.db-wal
+*.sqlite
+*.sqlite3
+*.pcap
+*.pcapng
+
+# OS / editor noise
+.DS_Store
+.idea/
+.vscode/
+*.swp

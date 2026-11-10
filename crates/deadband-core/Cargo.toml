@@ -1,0 +1,12 @@
+[package]
+name = "deadband-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Deadband core engine: passive OT traffic ingestion, parsing, asset inventory, and detection. No UI, no network transmission — analysis only."
+
+[dependencies]
+# SQLite storage. `bundled` compiles SQLite from source so the app needs
+# no system SQLite install on Mac, Windows, or Linux.
+rusqlite = { version = "0.32", features = ["bundled"] }
