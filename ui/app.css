@@ -162,6 +162,15 @@ footer.note { color: var(--md-sys-color-on-surface-variant); font-size: 12px; }
 .log-row.kind-write { border-left-color: var(--md-sys-color-tertiary); background: color-mix(in srgb, var(--md-sys-color-tertiary) 8%, transparent); }
 .log-row.kind-discovery, .log-row.kind-connection { border-left-color: var(--md-sys-color-secondary); }
 .log-row.kind-alert { border-left-color: var(--md-sys-color-error); }
+.log-row.kind-analyst { border-left-color: var(--md-sys-color-tertiary); }
+
+/* Analyst card */
+.analyst-output {
+  white-space: pre-wrap; line-height: 1.65; font-size: 13.5px;
+  border: 1px solid var(--md-sys-color-outline-variant); border-radius: 10px;
+  padding: 12px 14px; margin-top: 10px; user-select: text; -webkit-user-select: text;
+}
+select.text-input { max-width: 240px; }
 
 /* Purdue map */
 .map-scroll { overflow-x: auto; }

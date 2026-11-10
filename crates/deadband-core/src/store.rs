@@ -298,6 +298,14 @@ impl Store {
         Ok(pairs)
     }
 
+    /// The most recent alert event, if any (the analyst's subject).
+    pub fn latest_alert(&self) -> Result<Option<Event>> {
+        Ok(self
+            .recent_events(500)?
+            .into_iter()
+            .find(|event| event.kind == EventKind::AlertRaised))
+    }
+
     /// How many alert events have been stored (the Rules view counter).
     pub fn alert_count(&self) -> Result<i64> {
         Ok(self.conn.query_row(
@@ -344,6 +352,7 @@ fn kind_from_tag(tag: &str) -> EventKind {
         "connection_observed" => EventKind::ConnectionObserved,
         "modbus_command" => EventKind::ModbusCommand { function_code: 0, is_write: false },
         "alert_raised" => EventKind::AlertRaised,
+        "analyst_note" => EventKind::AnalystNote,
         _ => EventKind::PacketObserved,
     }
 }
@@ -361,6 +370,7 @@ fn event_kind_tag(kind: &EventKind) -> &'static str {
         EventKind::ConnectionObserved => "connection_observed",
         EventKind::ModbusCommand { .. } => "modbus_command",
         EventKind::AlertRaised => "alert_raised",
+        EventKind::AnalystNote => "analyst_note",
     }
 }
 

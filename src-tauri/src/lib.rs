@@ -132,6 +132,7 @@ impl From<&Event> for EventDto {
                 EventKind::ModbusCommand { is_write: true, .. } => "write",
                 EventKind::ModbusCommand { .. } => "modbus",
                 EventKind::AlertRaised => "alert",
+                EventKind::AnalystNote => "analyst",
             },
             src_ip: event.src_ip.map(|ip| ip.to_string()),
             dst_ip: event.dst_ip.map(|ip| ip.to_string()),
@@ -469,6 +470,184 @@ fn run_scenario(app: tauri::AppHandle, state: tauri::State<AppState>, name: Stri
     true
 }
 
+/// Minimal HTTP/1.1 client for the local Ollama endpoint — just
+/// enough for /api/tags and /api/chat, so the app gains no HTTP
+/// dependency for one localhost integration. Handles Content-Length
+/// and chunked bodies.
+fn http_local(
+    method: &str,
+    path: &str,
+    body: Option<&str>,
+    timeout: std::time::Duration,
+) -> Result<String, String> {
+    use std::io::{Read, Write};
+    let addr: std::net::SocketAddr = "127.0.0.1:11434".parse().expect("static addr");
+    let mut stream = std::net::TcpStream::connect_timeout(&addr, timeout)
+        .map_err(|e| format!("cannot reach Ollama at 127.0.0.1:11434 ({e})"))?;
+    let _ = stream.set_read_timeout(Some(timeout));
+    let _ = stream.set_write_timeout(Some(timeout));
+    let payload = body.unwrap_or("");
+    let request = format!(
+        "{method} {path} HTTP/1.1\r\nHost: 127.0.0.1:11434\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}",
+        payload.len()
+    );
+    stream.write_all(request.as_bytes()).map_err(|e| e.to_string())?;
+    let mut raw = Vec::new();
+    stream.read_to_end(&mut raw).map_err(|e| e.to_string())?;
+    let text = String::from_utf8_lossy(&raw).into_owned();
+    let (head, rest) = text.split_once("\r\n\r\n").ok_or("malformed HTTP response")?;
+    let status_line = head.lines().next().unwrap_or("");
+    if !status_line.contains(" 200") {
+        return Err(format!("Ollama answered: {status_line}"));
+    }
+    if head.to_ascii_lowercase().contains("transfer-encoding: chunked") {
+        Ok(decode_chunked(rest))
+    } else {
+        Ok(rest.to_string())
+    }
+}
+
+/// Decodes a chunked transfer body (best effort; returns the input
+/// unchanged if the framing doesn't parse).
+fn decode_chunked(body: &str) -> String {
+    let mut out = String::new();
+    let mut rest = body;
+    loop {
+        let Some(nl) = rest.find("\r\n") else { return out };
+        let size = usize::from_str_radix(rest[..nl].trim(), 16).unwrap_or(0);
+        if size == 0 {
+            return out;
+        }
+        let start = nl + 2;
+        let Some(chunk) = rest.get(start..start + size) else { return out };
+        out.push_str(chunk);
+        rest = &rest[(start + size).min(rest.len())..];
+        if rest.starts_with("\r\n") {
+            rest = &rest[2..];
+        }
+    }
+}
+
+/// The shell's Ollama-backed analyst client (core AnalystClient).
+struct OllamaClient {
+    model: String,
+}
+
+impl deadband_core::analyst::AnalystClient for OllamaClient {
+    fn explain(&self, prompt: &str) -> Result<String, deadband_core::analyst::AnalystError> {
+        use deadband_core::analyst::AnalystError;
+        let body = deadband_core::analyst::ollama_chat_body(&self.model, prompt);
+        let response = http_local("POST", "/api/chat", Some(&body), std::time::Duration::from_secs(180))
+            .map_err(AnalystError::Transport)?;
+        deadband_core::analyst::parse_ollama_response(&response)
+    }
+}
+
+/// Ollama reachability + installed models, for the analyst card.
+#[derive(Debug, Serialize)]
+struct AnalystStatusDto {
+    reachable: bool,
+    models: Vec<String>,
+    message: String,
+}
+
+/// Is a local Ollama running, and which models does it have?
+#[tauri::command]
+fn analyst_status() -> AnalystStatusDto {
+    match http_local("GET", "/api/tags", None, std::time::Duration::from_millis(900)) {
+        Ok(text) => {
+            let models = deadband_core::analyst::ollama_model_names(&text);
+            let message = if models.is_empty() {
+                "Ollama is running but has no models yet — pull one (e.g. ollama pull llama3.1:8b)."
+                    .to_string()
+            } else {
+                format!("Ollama reachable · {} model(s) available.", models.len())
+            };
+            AnalystStatusDto { reachable: true, models, message }
+        }
+        Err(_) => AnalystStatusDto {
+            reachable: false,
+            models: Vec::new(),
+            message: "No local model detected (Ollama not running at 127.0.0.1:11434). \
+                      Deadband works fully without it — the analyst is optional."
+                .to_string(),
+        },
+    }
+}
+
+/// What the analyst card shows after an explanation.
+#[derive(Debug, Serialize)]
+struct ExplainDto {
+    narrative: String,
+    model: String,
+    alert_summary: String,
+}
+
+/// Asks the local model to explain the latest alert in plain
+/// English. The narrative is also recorded as an analyst note in the
+/// event log (first lines only — the full text returns to the UI).
+#[tauri::command]
+async fn explain_latest_alert(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+    model: Option<String>,
+) -> Result<ExplainDto, String> {
+    let store = Arc::clone(&state.store);
+    let factors = state
+        .anomaly_shared
+        .lock()
+        .map(|dto| dto.last_factors.clone())
+        .unwrap_or_default();
+    tauri::async_runtime::spawn_blocking(move || {
+        // Pick the model: the UI's choice, else the first installed.
+        let chosen = model.filter(|m| !m.trim().is_empty()).or_else(|| {
+            http_local("GET", "/api/tags", None, std::time::Duration::from_secs(2))
+                .ok()
+                .and_then(|text| deadband_core::analyst::ollama_model_names(&text).into_iter().next())
+        });
+        let Some(model) = chosen else {
+            return Err("No local model available — is Ollama running with a model pulled?".to_string());
+        };
+        let alert_summary = {
+            let store = store.lock().map_err(|_| "store lock poisoned".to_string())?;
+            store
+                .latest_alert()
+                .map_err(|e| e.to_string())?
+                .map(|event| event.summary.clone())
+                .ok_or_else(|| "No alert to explain yet — fire a scenario from the Rules view first.".to_string())?
+        };
+        let layer = deadband_core::detect::AnalystLayer { enabled: true };
+        let client = OllamaClient { model: model.clone() };
+        let narrative = {
+            let store = store.lock().map_err(|_| "store lock poisoned".to_string())?;
+            layer
+                .explain_latest(&client, &store, factors)
+                .ok_or_else(|| "No alert to explain yet.".to_string())?
+                .map_err(|e| e.to_string())?
+        };
+        // Record a short analyst note in the log and surface it live.
+        let preview: String = narrative.chars().take(280).collect();
+        let note = deadband_core::model::Event::new(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs() as i64)
+                .unwrap_or(0),
+            EventKind::AnalystNote,
+            format!("Analyst brief ({model}): {preview}"),
+        );
+        if let Ok(store) = store.lock() {
+            if let Ok(id) = store.record_event(&note) {
+                let mut stored = note.clone();
+                stored.id = Some(id);
+                let _ = app.emit("traffic", EventDto::from(&stored));
+            }
+        }
+        Ok(ExplainDto { narrative, model, alert_summary })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// The most recent stored events (newest first) — the log's backlog
 /// when the Events view opens.
 #[tauri::command]
@@ -607,7 +786,9 @@ pub fn run() {
             replay_status,
             rules_status,
             run_scenario,
-            anomaly_status
+            anomaly_status,
+            analyst_status,
+            explain_latest_alert
         ])
         .run(tauri::generate_context!())
         .expect("error while running Deadband");

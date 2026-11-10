@@ -48,7 +48,7 @@
     <main>
       <div class="page-head">
         <headline medium id="page-title">Live map</headline>
-        <span class="phase-tag">Phase 5 — anomaly early warning</span>
+        <span class="phase-tag">Phase 6 — AI analyst (optional)</span>
       </div>
 
       <section id="view-live" class="view">
@@ -186,6 +186,21 @@
           reasons listed; at 50+ an early-warning alert fires. It exists to catch the
           snooping phase, before anything destructive happens. While it says
           "learning", alerts are held back on purpose.</p>
+        </nmui-card>
+
+        <nmui-card outlined>
+          <h2 class="card-title">AI analyst — layer 3 (optional, local model)</h2>
+          <p id="analyst-status" class="sim-status">Checking for a local model…</p>
+          <div class="card-actions">
+            <select id="analyst-model" class="text-input" aria-label="Local model"></select>
+            <nmui-button tonal id="btn-explain">Explain the latest alert</nmui-button>
+          </div>
+          <div id="analyst-output" class="analyst-output" hidden></div>
+          <p class="dim">The analyst sends a local model (Ollama, on this machine only)
+          a digested incident — the alert, its factors, nearby events — never raw
+          packets, and nothing leaves this machine. Its brief is AI-generated
+          interpretation, labeled as such, and advisory only: it cannot act, and
+          Deadband works fully without it.</p>
         </nmui-card>
 
         <nmui-card outlined class="scenarios-card">
@@ -378,6 +393,46 @@
       });
     } catch (err) { /* anomaly card is best-effort */ }
   }
+
+  // ---- analyst (layer 3, optional) ---------------------------------------
+  const analystStatusEl = document.getElementById('analyst-status');
+  const analystModelEl = document.getElementById('analyst-model');
+  const analystOutputEl = document.getElementById('analyst-output');
+  const btnExplain = document.getElementById('btn-explain');
+  let analystModelsLoaded = false;
+
+  async function loadAnalyst() {
+    if (!invoke) return;
+    try {
+      const a = await invoke('analyst_status');
+      analystStatusEl.textContent = a.message;
+      btnExplain.toggleAttribute('disabled', !a.reachable || a.models.length === 0);
+      if (!analystModelsLoaded && a.models.length) {
+        analystModelsLoaded = true;
+        a.models.forEach((m) => {
+          const opt = document.createElement('option');
+          opt.value = m; opt.textContent = m;
+          analystModelEl.appendChild(opt);
+        });
+      }
+    } catch (err) { /* analyst card is best-effort */ }
+  }
+  loadAnalyst();
+  setInterval(loadAnalyst, 15000);
+
+  btnExplain.addEventListener('click', async () => {
+    if (!invoke) return;
+    analystOutputEl.hidden = false;
+    analystOutputEl.textContent = 'Asking the local model… this can take a minute.';
+    try {
+      const r = await invoke('explain_latest_alert', { model: analystModelEl.value || null });
+      analystOutputEl.textContent =
+        'AI-GENERATED INTERPRETATION · model: ' + r.model + '\nAlert: ' + r.alert_summary +
+        '\n\n' + r.narrative;
+    } catch (err) {
+      analystOutputEl.textContent = 'The analyst could not run: ' + err;
+    }
+  });
 
   const rulesStatusEl = document.getElementById('rules-status');
   const rulesListEl = document.getElementById('rules-list');

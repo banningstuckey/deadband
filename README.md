@@ -10,17 +10,18 @@ phase, before anything destructive happens. It is built for the plants that
 can't afford enterprise OT security platforms: small utilities, water
 systems, and factories.
 
-> **Status: Phase 5 — anomaly early warning.** The app ships a
+> **Status: Phase 6 — optional AI analyst.** The app ships a
 > built-in lab (five virtual devices generating real Modbus/TCP
 > frames), the live Purdue map, PCAP replay with passive discovery,
-> and two detection layers: seven hard rules evaluated per packet,
-> and a statistical early-warning layer that learns a baseline of
-> normal (peers, functions, writers, volumes) and scores traffic in
-> 30-second chunks — with the contributing factors always shown. A
-> "slow recon" lab scenario (probing only, nothing destructive)
-> proves the point: the rules only note a new device while the
-> anomaly layer raises the early warning. An optional local-LLM
-> analyst layer is next.
+> and three detection layers: seven hard rules evaluated per packet;
+> a statistical early-warning layer that learns a baseline of normal
+> and scores traffic in 30-second chunks with contributing factors;
+> and an optional analyst that hands a *local* model (Ollama, same
+> machine — nothing leaves it) a digested incident and returns a
+> plain-English brief: what happened, what it resembles, what to
+> check next. The analyst is advisory prose, clearly labelled
+> AI-generated, and the app is complete without it. Live capture on
+> a real interface is the remaining v1 phase.
 
 ## Try it in five minutes (the demo)
 

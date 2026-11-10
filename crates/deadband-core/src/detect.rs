@@ -828,13 +828,15 @@ impl DetectionLayer for AnomalyLayer {
     }
 }
 
-/// Layer 3 — the optional local-LLM analyst.
+/// Layer 3 — the optional local-LLM analyst (Phase 6, see
+/// [`crate::analyst`]).
 ///
-/// Phase 6 implements this against a local model endpoint (e.g. Ollama
-/// on the same machine). It receives only digested chunk summaries,
-/// anomaly factors, and alert context — never a raw packet firehose.
-/// Its output is narrative prose for a human, clearly labelled as
-/// AI-generated interpretation.
+/// Implemented against a local model endpoint (Ollama on the same
+/// machine). It receives only a digested incident — alert, factors,
+/// surrounding events — never a raw packet firehose. Its output is
+/// narrative prose for a human, clearly labelled as AI-generated
+/// interpretation. The analyst is on-demand (a human asks), never
+/// part of the per-packet path.
 #[derive(Debug, Default)]
 pub struct AnalystLayer {
     /// Whether a local model endpoint is configured. Off/absent must
@@ -847,6 +849,25 @@ impl AnalystLayer {
     pub fn new() -> AnalystLayer {
         AnalystLayer { enabled: false }
     }
+
+    /// Explains the store's latest alert through the given client.
+    /// Returns `None` when the layer is disabled or no alert exists;
+    /// `Some(Err)` when the model call itself failed.
+    pub fn explain_latest<C: crate::analyst::AnalystClient>(
+        &self,
+        client: &C,
+        store: &crate::store::Store,
+        extra_factors: Vec<(String, i32)>,
+    ) -> Option<Result<String, crate::analyst::AnalystError>> {
+        if !self.enabled {
+            return None;
+        }
+        match crate::analyst::IncidentContext::for_latest_alert(store, extra_factors) {
+            Ok(Some(context)) => Some(crate::analyst::explain_incident(client, &context)),
+            Ok(None) => None,
+            Err(err) => Some(Err(crate::analyst::AnalystError::Transport(err.to_string()))),
+        }
+    }
 }
 
 impl DetectionLayer for AnalystLayer {
@@ -855,7 +876,8 @@ impl DetectionLayer for AnalystLayer {
     }
 
     fn evaluate(&mut self, _events: &[Event]) -> Vec<Alert> {
-        // Phase 6: summarise flagged chunks via the local model.
+        // The analyst is on-demand prose (explain_latest), never an
+        // automatic per-chunk evaluation.
         Vec::new()
     }
 }

@@ -281,6 +281,10 @@ pub enum EventKind {
     },
     /// A detection layer raised an alert (detail lives in the alert).
     AlertRaised,
+    /// The optional LLM analyst wrote a narrative about an alert
+    /// (Phase 6). Advisory prose, clearly labelled AI-generated;
+    /// never counted as an alert itself.
+    AnalystNote,
 }
 
 /// One timestamped observation flowing through the pipeline. Events are
