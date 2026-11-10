@@ -3,9 +3,22 @@
 Deadband's UI library is [nmui](https://github.com/nativemui/nmui)
 (Banning's own Material 3 vanilla web-component library). Per the UI
 decision in `PROJECT_PLAN.md`, the app **pins** a specific nmui version
-instead of tracking the moving repo: the files here are copied verbatim
-from nmui and are not edited in place. To upgrade, re-copy from a newer
-nmui release and bump the pin note below.
+instead of tracking the moving repo: the files here are generated from
+nmui by `tools/vendor_nmui.py` and are not hand-edited. To upgrade,
+re-run that script against a newer nmui checkout and bump the pin note
+below.
+
+**One deliberate deviation from verbatim:** each component's JS is
+missing its first two statements — the CSS module import
+(`import X from "./x.css" with { type: "css" }`) and the
+`adoptedStyleSheets` push. WebKit, the engine inside Tauri's macOS
+WKWebView (and Linux's WebKitGTK), cannot parse CSS module imports and
+kills the whole module, so no component registers (confirmed on a real
+Mac build 2026-11-10: theme CSS loaded, components never upgraded).
+The generator strips only that header; component logic is untouched,
+and the app loads the same CSS files with plain `<link>` tags in
+`ui/index.html`. Upstream nmui keeps its CSS-import design — this is
+an app-side adaptation for the desktop webview, not an nmui change.
 
 - **Pinned version:** nmui v0.40.0 (repo commit
   `6e2fc95d3d4b341ba7f7396272b0d1909ec9dd87`)

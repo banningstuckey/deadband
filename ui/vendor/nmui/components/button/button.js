@@ -1,8 +1,8 @@
-import buttonStyles from "./button.css" with { type: "css" };
-
-if (!document.adoptedStyleSheets.includes(buttonStyles)) {
-  document.adoptedStyleSheets.push(buttonStyles);
-}
+/* GENERATED for Deadband from nmui — do not hand-edit.
+   The CSS-module import header of the original is removed:
+   WebKit (Tauri's macOS/Linux webview) cannot parse it.
+   This component's CSS is loaded by ui/index.html instead.
+   Regenerate with tools/vendor_nmui.py. */
 
 const VARIANTS = ["elevated", "filled", "tonal", "outlined", "text"];
 const SIZES = ["xsmall", "small", "medium", "large", "xlarge"];

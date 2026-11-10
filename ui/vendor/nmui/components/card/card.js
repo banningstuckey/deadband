@@ -1,8 +1,8 @@
-import cardStyles from "./card.css" with { type: "css" };
-
-if (!document.adoptedStyleSheets.includes(cardStyles)) {
-  document.adoptedStyleSheets.push(cardStyles);
-}
+/* GENERATED for Deadband from nmui — do not hand-edit.
+   The CSS-module import header of the original is removed:
+   WebKit (Tauri's macOS/Linux webview) cannot parse it.
+   This component's CSS is loaded by ui/index.html instead.
+   Regenerate with tools/vendor_nmui.py. */
 
 /**
  * <nmui-card> — M3 card. Content is free light DOM — headline,

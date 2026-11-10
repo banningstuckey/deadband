@@ -1,8 +1,8 @@
-import badgeStyles from "./badge.css" with { type: "css" };
-
-if (!document.adoptedStyleSheets.includes(badgeStyles)) {
-  document.adoptedStyleSheets.push(badgeStyles);
-}
+/* GENERATED for Deadband from nmui — do not hand-edit.
+   The CSS-module import header of the original is removed:
+   WebKit (Tauri's macOS/Linux webview) cannot parse it.
+   This component's CSS is loaded by ui/index.html instead.
+   Regenerate with tools/vendor_nmui.py. */
 
 /**
  * <nmui-badge> — M3 badge. A small count or status mark anchored

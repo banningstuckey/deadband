@@ -1,8 +1,8 @@
-import dividerStyles from "./divider.css" with { type: "css" };
-
-if (!document.adoptedStyleSheets.includes(dividerStyles)) {
-  document.adoptedStyleSheets.push(dividerStyles);
-}
+/* GENERATED for Deadband from nmui — do not hand-edit.
+   The CSS-module import header of the original is removed:
+   WebKit (Tauri's macOS/Linux webview) cannot parse it.
+   This component's CSS is loaded by ui/index.html instead.
+   Regenerate with tools/vendor_nmui.py. */
 
 /**
  * <nmui-divider> — M3 divider. A thin rule that groups content.
