@@ -10,8 +10,10 @@ phase, before anything destructive happens. It is built for the plants that
 can't afford enterprise OT security platforms: small utilities, water
 systems, and factories.
 
-> **Status: Phase 0 — skeleton.** The workspace, engine crate, and app
-> shell exist and build. Traffic, parsing, and detection land phase by
+> **Status: Phase 1 — simulated plant.** The app ships a built-in lab:
+> five virtual devices (office PC, historian, HMI, two PLCs) generating
+> real Modbus/TCP frames through the real pipeline — parser, SQLite
+> store, live event log in the Events view. Detection lands phase by
 > phase; see the architecture below.
 
 ## Safety rules (non-negotiable)

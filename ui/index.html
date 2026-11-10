@@ -29,58 +29,114 @@
       <header>
         <headline small class="rail-brand">DEADBAND</headline>
       </header>
-      <a href="#" selected>Live map</a>
-      <a href="#">Events</a>
-      <a href="#">Assets</a>
-      <a href="#">Rules</a>
-      <a href="#">Settings</a>
+      <a href="#" data-view="live" selected>Live map</a>
+      <a href="#" data-view="events">Events</a>
+      <a href="#" data-view="assets">Assets</a>
+      <a href="#" data-view="rules">Rules</a>
+      <a href="#" data-view="settings">Settings</a>
     </nmui-navigation>
 
     <main>
       <div class="page-head">
-        <headline medium>Live map</headline>
-        <span class="phase-tag">Phase 0 — skeleton</span>
+        <headline medium id="page-title">Live map</headline>
+        <span class="phase-tag">Phase 1 — simulated plant</span>
       </div>
 
-      <nmui-card outlined>
-        <h2 class="card-title">Engine status</h2>
-        <p id="engine-status">Contacting the Rust core…</p>
-        <p class="dim">This line is filled in by the <code>engine_status</code> Tauri command,
-        served by <code>deadband-core</code>. If it resolves, the Rust ↔ UI bridge works.</p>
-        <div class="card-actions">
-          <nmui-button tonal id="recheck">Recheck</nmui-button>
-        </div>
-      </nmui-card>
+      <section id="view-live" class="view">
+        <nmui-card outlined>
+          <h2 class="card-title">Engine status</h2>
+          <p id="engine-status">Contacting the Rust core…</p>
+          <p class="dim">This line is filled in by the <code>engine_status</code> Tauri command,
+          served by <code>deadband-core</code>. If it resolves, the Rust ↔ UI bridge works.</p>
+          <div class="card-actions">
+            <nmui-button tonal id="recheck">Recheck</nmui-button>
+          </div>
+        </nmui-card>
 
-      <nmui-card outlined>
-        <h2 class="card-title">Purdue levels (static placeholder)</h2>
-        <p>The live Purdue map arrives in Phase 2. For now, the levels it will draw:</p>
-        <ol class="levels" reversed>
-          <li>Level 5 <span>— Internet</span></li>
-          <li>Level 4 <span>— Enterprise IT</span></li>
-          <li>Level 3.5 <span>— IT/OT DMZ</span></li>
-          <li>Level 3 <span>— Operations</span></li>
-          <li>Level 2 <span>— Supervisory Control</span></li>
-          <li>Level 1 <span>— Basic Control (PLCs, RTUs)</span></li>
-          <li>Level 0 <span>— Physical Process</span></li>
-        </ol>
-      </nmui-card>
+        <nmui-card outlined>
+          <h2 class="card-title">Simulated plant</h2>
+          <p>The built-in lab: five virtual devices generating real Modbus/TCP
+          frames through the same pipeline a live sensor will feed. Start it
+          from the <strong>Events</strong> view and watch the log stream.</p>
+          <ul id="plant-list" class="plant-list"></ul>
+        </nmui-card>
 
-      <nmui-card outlined>
-        <h2 class="card-title">Safety rules</h2>
-        <p>Passive only — Deadband reads copies of traffic and never transmits into a monitored network.
-        AI warns, never acts. Local first, no cloud. Lab-proven before it goes anywhere near a real plant.</p>
-      </nmui-card>
+        <nmui-card outlined>
+          <h2 class="card-title">Purdue levels (static placeholder)</h2>
+          <p>The live Purdue map arrives in Phase 2. For now, the levels it will draw:</p>
+          <ol class="levels" reversed>
+            <li>Level 5 <span>— Internet</span></li>
+            <li>Level 4 <span>— Enterprise IT</span></li>
+            <li>Level 3.5 <span>— IT/OT DMZ</span></li>
+            <li>Level 3 <span>— Operations</span></li>
+            <li>Level 2 <span>— Supervisory Control</span></li>
+            <li>Level 1 <span>— Basic Control (PLCs, RTUs)</span></li>
+            <li>Level 0 <span>— Physical Process</span></li>
+          </ol>
+        </nmui-card>
+
+        <nmui-card outlined>
+          <h2 class="card-title">Safety rules</h2>
+          <p>Passive only — Deadband reads copies of traffic and never transmits into a monitored network.
+          AI warns, never acts. Local first, no cloud. Lab-proven before it goes anywhere near a real plant.</p>
+        </nmui-card>
+      </section>
+
+      <section id="view-events" class="view" hidden>
+        <nmui-card outlined>
+          <h2 class="card-title">Simulated plant feed</h2>
+          <p id="sim-status" class="sim-status">Simulation stopped · 0 devices · 0 events stored</p>
+          <div class="card-actions">
+            <nmui-button filled id="btn-start">Start simulation</nmui-button>
+            <nmui-button outlined id="btn-stop">Stop</nmui-button>
+          </div>
+        </nmui-card>
+
+        <nmui-card outlined>
+          <h2 class="card-title">Live event log</h2>
+          <div id="event-log" class="event-log">
+            <p class="dim" id="log-empty">No events yet — start the simulation and Modbus traffic will stream in here.</p>
+          </div>
+        </nmui-card>
+      </section>
+
+      <section id="view-assets" class="view" hidden>
+        <nmui-card outlined>
+          <h2 class="card-title">Assets</h2>
+          <p>Passive asset inventory arrives with PCAP replay in Phase 3 — devices
+          will appear here as traffic reveals them. The simulated plant's roster
+          is listed on the Live map view.</p>
+        </nmui-card>
+      </section>
+
+      <section id="view-rules" class="view" hidden>
+        <nmui-card outlined>
+          <h2 class="card-title">Rules</h2>
+          <p>The rules detection layer arrives in Phase 4: new device, IT → Level 1
+          direct, writes from anyone but the HMI, and more — all evaluated against
+          the traffic this pipeline is already collecting.</p>
+        </nmui-card>
+      </section>
+
+      <section id="view-settings" class="view" hidden>
+        <nmui-card outlined>
+          <h2 class="card-title">Settings</h2>
+          <p>Nothing to configure yet. Deadband is local-first: events are stored
+          in a SQLite file in the app's data directory on this machine.</p>
+        </nmui-card>
+      </section>
 
       <footer class="note">UI: nmui v0.40.0, vendored and pinned (ui/vendor/nmui) · Theme: Deadband Industrial, one theme file</footer>
     </main>
   </div>
 
 <script>
+  const invoke = window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke;
+  const listen = window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.listen;
+
   async function checkEngine() {
     const el = document.getElementById('engine-status');
     try {
-      const invoke = window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke;
       if (!invoke) throw new Error('Tauri bridge not found (page opened outside the app?)');
       const status = await invoke('engine_status');
       el.innerHTML = '<span class="ok">●</span> ' +
@@ -93,14 +149,90 @@
   document.getElementById('recheck').addEventListener('click', checkEngine);
   checkEngine();
 
-  // Placeholder destinations: move the selection, go nowhere yet.
+  // ---- view switching -------------------------------------------------
+  const titles = { live: 'Live map', events: 'Events', assets: 'Assets', rules: 'Rules', settings: 'Settings' };
   document.querySelectorAll('#rail a').forEach((a) => {
     a.addEventListener('click', (e) => {
       e.preventDefault();
       document.querySelectorAll('#rail a').forEach((x) => x.removeAttribute('selected'));
       a.setAttribute('selected', '');
+      const view = a.dataset.view;
+      document.querySelectorAll('.view').forEach((v) => { v.hidden = v.id !== 'view-' + view; });
+      document.getElementById('page-title').textContent = titles[view] || view;
     });
   });
+
+  // ---- simulated plant ------------------------------------------------
+  const logEl = document.getElementById('event-log');
+  const emptyEl = document.getElementById('log-empty');
+  const statusEl = document.getElementById('sim-status');
+  const MAX_ROWS = 300;
+
+  function fmtTime(tsSeconds) {
+    return new Date(tsSeconds * 1000).toLocaleTimeString([], { hour12: false });
+  }
+
+  function addRow(dto, prepend) {
+    if (emptyEl) emptyEl.remove();
+    const row = document.createElement('div');
+    row.className = 'log-row kind-' + dto.kind;
+    const time = document.createElement('span');
+    time.className = 'log-time';
+    time.textContent = fmtTime(dto.timestamp);
+    const summary = document.createElement('span');
+    summary.textContent = dto.summary;
+    row.append(time, summary);
+    if (prepend && logEl.firstChild) logEl.insertBefore(row, logEl.firstChild);
+    else logEl.appendChild(row);
+    while (logEl.children.length > MAX_ROWS) logEl.removeChild(logEl.lastChild);
+  }
+
+  async function refreshStatus() {
+    if (!invoke) return;
+    try {
+      const s = await invoke('simulation_status');
+      statusEl.textContent =
+        (s.running ? 'Simulation running' : 'Simulation stopped') +
+        ' · ' + s.devices + ' devices · ' + s.events + ' events stored';
+    } catch (err) { /* status line is best-effort */ }
+  }
+
+  document.getElementById('btn-start').addEventListener('click', async () => {
+    if (!invoke) return;
+    await invoke('start_simulation');
+    refreshStatus();
+  });
+  document.getElementById('btn-stop').addEventListener('click', async () => {
+    if (!invoke) return;
+    await invoke('stop_simulation');
+    refreshStatus();
+  });
+
+  (async () => {
+    if (!invoke) return;
+    // Roster for the Live map view.
+    try {
+      const devices = await invoke('plant_devices');
+      const list = document.getElementById('plant-list');
+      devices.forEach((d) => {
+        const li = document.createElement('li');
+        li.textContent = (d.label || d.ip) + ' — ' + (d.level || 'level unknown') +
+          ' · ' + d.role + ' · ' + d.ip;
+        list.appendChild(li);
+      });
+    } catch (err) { /* roster is decorative until the sim runs */ }
+    // Backlog, newest first — appended in order so newest stays on top.
+    try {
+      const backlog = await invoke('recent_events', { limit: 60 });
+      backlog.forEach((dto) => addRow(dto, false));
+    } catch (err) { /* empty log is fine */ }
+    // Live stream.
+    if (listen) {
+      await listen('traffic', (e) => addRow(e.payload, true));
+    }
+    refreshStatus();
+    setInterval(refreshStatus, 2000);
+  })();
 </script>
 </body>
 </html>

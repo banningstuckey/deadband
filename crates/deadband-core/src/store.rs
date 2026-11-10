@@ -182,6 +182,107 @@ impl Store {
     pub fn event_count(&self) -> Result<i64> {
         Ok(self.conn.query_row("SELECT COUNT(*) FROM events", [], |row| row.get(0))?)
     }
+
+    /// True when a device with this IP is already in the inventory.
+    pub fn device_exists(&self, ip: std::net::IpAddr) -> Result<bool> {
+        let count: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM devices WHERE ip = ?1",
+            params![ip.to_string()],
+            |row| row.get(0),
+        )?;
+        Ok(count > 0)
+    }
+
+    /// Records one packet against a connection: inserts the row on
+    /// first sight (returns `true`), otherwise bumps packet/byte
+    /// counters and `last_seen` (returns `false`).
+    pub fn record_connection(&self, conn: &crate::model::Connection) -> Result<bool> {
+        let existing: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM connections
+             WHERE src_ip = ?1 AND dst_ip = ?2 AND dst_port = ?3 AND protocol = ?4",
+            params![
+                conn.src_ip.to_string(),
+                conn.dst_ip.to_string(),
+                conn.dst_port,
+                conn.protocol.as_tag(),
+            ],
+            |row| row.get(0),
+        )?;
+        if existing > 0 {
+            self.conn.execute(
+                "UPDATE connections
+                 SET last_seen = ?1, packet_count = packet_count + ?2,
+                     byte_count = byte_count + ?3
+                 WHERE src_ip = ?4 AND dst_ip = ?5 AND dst_port = ?6 AND protocol = ?7",
+                params![
+                    conn.last_seen,
+                    conn.packet_count as i64,
+                    conn.byte_count as i64,
+                    conn.src_ip.to_string(),
+                    conn.dst_ip.to_string(),
+                    conn.dst_port,
+                    conn.protocol.as_tag(),
+                ],
+            )?;
+            return Ok(false);
+        }
+        self.conn.execute(
+            "INSERT INTO connections
+             (src_ip, dst_ip, dst_port, protocol, first_seen, last_seen, packet_count, byte_count)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                conn.src_ip.to_string(),
+                conn.dst_ip.to_string(),
+                conn.dst_port,
+                conn.protocol.as_tag(),
+                conn.first_seen,
+                conn.last_seen,
+                conn.packet_count as i64,
+                conn.byte_count as i64,
+            ],
+        )?;
+        Ok(true)
+    }
+
+    /// The most recent events, newest first (the UI's initial backlog).
+    /// Kind tags are mapped back lossily — a stored Modbus event keeps
+    /// its summary text, which carries the detail the log displays.
+    pub fn recent_events(&self, limit: i64) -> Result<Vec<Event>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, timestamp, kind, src_ip, dst_ip, summary
+             FROM events ORDER BY id DESC LIMIT ?1",
+        )?;
+        let rows = stmt.query_map(params![limit], |row| {
+            let kind_text: String = row.get(2)?;
+            let src_text: Option<String> = row.get(3)?;
+            let dst_text: Option<String> = row.get(4)?;
+            Ok(Event {
+                id: row.get(0)?,
+                timestamp: row.get(1)?,
+                kind: kind_from_tag(&kind_text),
+                src_ip: src_text.as_deref().and_then(|text| text.parse().ok()),
+                dst_ip: dst_text.as_deref().and_then(|text| text.parse().ok()),
+                summary: row.get(5)?,
+            })
+        })?;
+        let mut events = Vec::new();
+        for event in rows {
+            events.push(event?);
+        }
+        Ok(events)
+    }
+}
+
+/// Inverse of [`event_kind_tag`], lossy for kinds that carry data
+/// (their detail survives in the event summary text).
+fn kind_from_tag(tag: &str) -> EventKind {
+    match tag {
+        "device_discovered" => EventKind::DeviceDiscovered,
+        "connection_observed" => EventKind::ConnectionObserved,
+        "modbus_command" => EventKind::ModbusCommand { function_code: 0, is_write: false },
+        "alert_raised" => EventKind::AlertRaised,
+        _ => EventKind::PacketObserved,
+    }
 }
 
 /// Maps a stored level label ("3.5") back to a [`PurdueLevel`].
@@ -245,5 +346,41 @@ mod tests {
         store.record_event(&event).unwrap();
         store.record_event(&Event::new(201, EventKind::PacketObserved, "poll")).unwrap();
         assert_eq!(store.event_count().unwrap(), 2);
+    }
+
+    #[test]
+    fn connections_upsert_and_count() {
+        use crate::model::{Connection, Protocol};
+        let store = Store::open_in_memory().unwrap();
+        let conn = Connection {
+            id: None,
+            src_ip: ip(10, 0, 2, 10),
+            dst_ip: ip(10, 0, 1, 11),
+            dst_port: 502,
+            protocol: Protocol::ModbusTcp,
+            first_seen: 10,
+            last_seen: 10,
+            packet_count: 1,
+            byte_count: 66,
+        };
+        assert!(store.record_connection(&conn).unwrap(), "first sight inserts");
+        assert!(!store.record_connection(&conn).unwrap(), "second sight updates");
+        let count: i64 = store
+            .conn
+            .query_row("SELECT packet_count FROM connections", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn recent_events_come_back_newest_first() {
+        let store = Store::open_in_memory().unwrap();
+        assert!(!store.device_exists(ip(10, 0, 1, 11)).unwrap());
+        store.record_event(&Event::new(1, EventKind::PacketObserved, "first")).unwrap();
+        store.record_event(&Event::new(2, EventKind::PacketObserved, "second")).unwrap();
+        let recent = store.recent_events(10).unwrap();
+        assert_eq!(recent.len(), 2);
+        assert_eq!(recent[0].summary, "second");
+        assert_eq!(recent[1].summary, "first");
     }
 }

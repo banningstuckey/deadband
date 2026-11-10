@@ -58,3 +58,34 @@ ol.levels li span { color: var(--md-sys-color-on-surface-variant); }
 .rail-brand { padding: 4px 8px; letter-spacing: 0.06em; }
 
 footer.note { color: var(--md-sys-color-on-surface-variant); font-size: 12px; }
+
+.view { display: grid; gap: 16px; align-content: start; }
+.view[hidden] { display: none; }
+
+.plant-list { margin: 8px 0 2px; padding-left: 20px; line-height: 1.9; }
+
+.sim-status { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+
+.event-log {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.45;
+  max-height: 460px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.log-row {
+  display: flex;
+  gap: 12px;
+  padding: 3px 8px 3px 10px;
+  border-left: 3px solid var(--md-sys-color-outline-variant);
+  border-bottom: 1px solid var(--md-sys-color-surface-container-high);
+}
+
+.log-time { color: var(--md-sys-color-on-surface-variant); flex: none; }
+.log-row.kind-modbus { border-left-color: var(--md-sys-color-primary); }
+.log-row.kind-write { border-left-color: var(--md-sys-color-tertiary); background: color-mix(in srgb, var(--md-sys-color-tertiary) 8%, transparent); }
+.log-row.kind-discovery, .log-row.kind-connection { border-left-color: var(--md-sys-color-secondary); }
+.log-row.kind-alert { border-left-color: var(--md-sys-color-error); }

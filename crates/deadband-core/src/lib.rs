@@ -33,8 +33,10 @@
 //! 3. **Local first, no cloud.** All data stays on the user's machine.
 
 pub mod detect;
+pub mod engine;
 pub mod model;
 pub mod parse;
+pub mod sim;
 pub mod source;
 pub mod store;
 
@@ -58,7 +60,7 @@ pub fn engine_status() -> EngineStatus {
     EngineStatus {
         name: "Deadband",
         version: env!("CARGO_PKG_VERSION"),
-        phase: "Phase 0 — skeleton",
+        phase: "Phase 1 — simulated plant",
         detection_layers: ["rules", "anomaly", "analyst"],
     }
 }
@@ -72,6 +74,6 @@ mod tests {
         let status = engine_status();
         assert_eq!(status.name, "Deadband");
         assert_eq!(status.detection_layers.len(), 3);
-        assert!(status.phase.starts_with("Phase 0"));
+        assert!(status.phase.starts_with("Phase 1"));
     }
 }

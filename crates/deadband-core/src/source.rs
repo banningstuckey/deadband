@@ -41,20 +41,21 @@ pub trait TrafficSource: Send {
 
 /// The built-in simulated plant's traffic source.
 ///
-/// Phase 0 stub: yields nothing. Phase 1 makes it generate realistic
-/// Modbus/TCP + ordinary IP traffic from a virtual office PC, historian,
-/// HMI, and PLCs, on a believable schedule — real packets into the real
-/// parser, so the GUI is never faking its data.
-#[derive(Debug, Default)]
+/// Wraps [`crate::sim::Plant`]: every call produces the plant's next
+/// real frame, stamped `base_ms + virtual clock`. The plant never runs
+/// dry (there is always a next poll), so this source never returns
+/// `None`; the caller paces itself.
 pub struct SimulatedSource {
-    // Phase 1 state goes here: virtual device roster, poll schedule,
-    // scenario runner.
+    base_ms: i64,
+    plant: crate::sim::Plant,
 }
 
 impl SimulatedSource {
-    /// Creates an idle simulated source.
-    pub fn new() -> SimulatedSource {
-        SimulatedSource {}
+    /// A simulated plant whose virtual clock starts at Unix
+    /// millisecond `base_ms` (the Tauri shell passes "now" so stored
+    /// events carry real-world timestamps).
+    pub fn new(base_ms: i64) -> SimulatedSource {
+        SimulatedSource { base_ms, plant: crate::sim::Plant::new() }
     }
 }
 
@@ -64,8 +65,7 @@ impl TrafficSource for SimulatedSource {
     }
 
     fn next_packet(&mut self) -> Option<Packet> {
-        // Phase 1: emit the virtual plant's scheduled traffic.
-        None
+        Some(self.plant.next_packet(self.base_ms))
     }
 }
 
@@ -74,9 +74,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn simulated_source_is_named_and_idle_in_phase_0() {
-        let mut source = SimulatedSource::new();
+    fn simulated_source_streams_plant_frames() {
+        let mut source = SimulatedSource::new(5_000);
         assert_eq!(source.name(), "simulated");
-        assert_eq!(source.next_packet(), None);
+        let first = source.next_packet().expect("plant always has traffic");
+        assert!(first.timestamp_ms >= 5_000);
+        assert!(!first.data.is_empty());
+        let second = source.next_packet().unwrap();
+        assert!(second.timestamp_ms >= first.timestamp_ms);
     }
 }
