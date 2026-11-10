@@ -274,6 +274,39 @@ impl Store {
         Ok(connections)
     }
 
+    /// (writer, target) pairs that have ever written, reconstructed
+    /// from stored Modbus command events — the rules layer's baseline
+    /// of "who normally writes to whom" when it starts cold.
+    pub fn write_pairs(&self) -> Result<Vec<(std::net::IpAddr, std::net::IpAddr)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT DISTINCT src_ip, dst_ip FROM events
+             WHERE kind = 'modbus_command' AND instr(summary, 'WRITE') > 0
+               AND src_ip IS NOT NULL AND dst_ip IS NOT NULL",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            let src: String = row.get(0)?;
+            let dst: String = row.get(1)?;
+            Ok((src, dst))
+        })?;
+        let mut pairs = Vec::new();
+        for row in rows {
+            let (src, dst) = row?;
+            if let (Ok(src), Ok(dst)) = (src.parse(), dst.parse()) {
+                pairs.push((src, dst));
+            }
+        }
+        Ok(pairs)
+    }
+
+    /// How many alert events have been stored (the Rules view counter).
+    pub fn alert_count(&self) -> Result<i64> {
+        Ok(self.conn.query_row(
+            "SELECT COUNT(*) FROM events WHERE kind = 'alert_raised'",
+            [],
+            |row| row.get(0),
+        )?)
+    }
+
     /// The most recent events, newest first (the UI's initial backlog).
     /// Kind tags are mapped back lossily — a stored Modbus event keeps
     /// its summary text, which carries the detail the log displays.

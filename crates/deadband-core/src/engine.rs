@@ -30,11 +30,13 @@ pub fn process_packet(store: &Store, packet: &Packet) -> Vec<Event> {
     for ip in [parsed.src_ip, parsed.dst_ip].into_iter().flatten() {
         if !store.device_exists(ip).unwrap_or(true) {
             let _ = store.add_device(&Device::new(ip, timestamp_s));
-            events.push(Event::new(
+            let mut event = Event::new(
                 timestamp_s,
                 EventKind::DeviceDiscovered,
                 format!("New device seen: {ip}"),
-            ));
+            );
+            event.src_ip = Some(ip);
+            events.push(event);
         }
     }
 
@@ -83,6 +85,39 @@ pub fn process_packet(store: &Store, packet: &Packet) -> Vec<Event> {
     // The headline event for this packet.
     events.push(packet_event(store, &parsed, src_ip, dst_ip, timestamp_s));
     finish(store, events)
+}
+
+/// [`process_packet`], plus the rules layer: alerts raised on this
+/// packet are converted to alert events, stored, and returned with
+/// the packet's own events (alerts last). The rules layer keeps its
+/// session state (baseline, dedup) in the caller's hands, so each
+/// feed — simulation, replay, scenario, future live capture — owns
+/// one, constructed via [`crate::detect::RulesLayer::from_store`].
+pub fn process_packet_with_rules(
+    store: &Store,
+    packet: &Packet,
+    rules: &mut crate::detect::RulesLayer,
+) -> Vec<Event> {
+    let mut events = process_packet(store, packet);
+    let alerts = rules.observe_packet(store, packet, &events);
+    if !alerts.is_empty() {
+        let parsed = parse_packet(packet).ok();
+        let alert_events: Vec<Event> = alerts
+            .iter()
+            .map(|alert| {
+                let mut event = Event::new(
+                    alert.timestamp,
+                    EventKind::AlertRaised,
+                    format!("{} — {}", alert.title, alert.detail),
+                );
+                event.src_ip = alert.device_ip;
+                event.dst_ip = parsed.as_ref().and_then(|p| p.dst_ip);
+                event
+            })
+            .collect();
+        events.extend(finish(store, alert_events));
+    }
+    events
 }
 
 /// Builds the per-packet event: Modbus commands get the full sentence,
@@ -214,6 +249,82 @@ mod tests {
         assert!(stats.events > 250, "events stored: {}", stats.events);
         assert!(modbus_commands > 50, "commands seen: {modbus_commands}");
         assert!(writes >= 1, "at least one setpoint write in 300 packets");
+    }
+
+    #[test]
+    fn normal_plant_traffic_raises_no_alerts() {
+        // The false-positive discipline: 400 packets of ordinary plant
+        // operation, rules armed, must produce zero alerts.
+        let store = Store::open_in_memory().unwrap();
+        for device in sim::roster() {
+            store.add_device(&device).unwrap();
+        }
+        let mut rules = crate::detect::RulesLayer::new();
+        let mut source = SimulatedSource::new(1_700_000_000_000);
+        let mut alerts = 0;
+        for _ in 0..400 {
+            let packet = source.next_packet().unwrap();
+            for event in process_packet_with_rules(&store, &packet, &mut rules) {
+                if event.kind == EventKind::AlertRaised {
+                    alerts += 1;
+                }
+            }
+        }
+        assert_eq!(alerts, 0, "normal traffic must never alert");
+        assert!(rules.baseline_sealed(), "baseline seals during the run");
+    }
+
+    #[test]
+    fn sample_replay_flags_the_laptop() {
+        // The Phase 3 sample was bait; the rules are the trap. The
+        // foreign laptop must be flagged for writing, and every one of
+        // the six foreign devices announced as new.
+        let store = Store::open_in_memory().unwrap();
+        let mut rules = crate::detect::RulesLayer::new();
+        let mut new_devices = 0;
+        let mut laptop_write_alerts = 0;
+        for packet in crate::sample::sample_packets() {
+            for event in process_packet_with_rules(&store, &packet, &mut rules) {
+                if event.kind == EventKind::AlertRaised {
+                    if event.summary.contains("[new-device]") {
+                        new_devices += 1;
+                    }
+                    if event.summary.contains("192.168.50.77")
+                        && (event.summary.contains("[write-from-non-hmi]")
+                            || event.summary.contains("[write-outside-pattern]"))
+                    {
+                        laptop_write_alerts += 1;
+                    }
+                }
+            }
+        }
+        assert_eq!(new_devices, 6, "all six foreign devices announced");
+        assert_eq!(laptop_write_alerts, 2, "the laptop's write trips rules 3 and 7");
+    }
+
+    #[test]
+    fn threat_intel_address_alerts() {
+        let store = Store::open_in_memory().unwrap();
+        let mut rules = crate::detect::RulesLayer::new();
+        let frame = sim::build_tcp_frame(
+            "02:db:00:00:04:0a",
+            "02:db:00:00:03:20",
+            [10, 0, 4, 10],
+            [203, 0, 113, 66],
+            51000,
+            443,
+            b"beacon",
+            1,
+        );
+        let events = process_packet_with_rules(
+            &store,
+            &Packet { timestamp_ms: 60_000, data: frame },
+            &mut rules,
+        );
+        assert!(
+            events.iter().any(|e| e.summary.contains("[threat-intel]")),
+            "{events:?}"
+        );
     }
 
     #[test]

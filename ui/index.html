@@ -31,7 +31,9 @@
   </div>
   <div class="shell">
     <nmui-navigation rail expanded id="rail">
-      <header>
+      <header class="rail-head">
+        <img class="rail-mark" src="./assets/deadband-mark.png" alt=""
+             onerror="this.remove()">
         <headline small class="rail-brand">DEADBAND</headline>
       </header>
       <a href="#" data-view="live" selected>Live map</a>
@@ -44,7 +46,7 @@
     <main>
       <div class="page-head">
         <headline medium id="page-title">Live map</headline>
-        <span class="phase-tag">Phase 3 — PCAP replay + discovery</span>
+        <span class="phase-tag">Phase 4 — rules layer</span>
       </div>
 
       <section id="view-live" class="view">
@@ -162,10 +164,24 @@
 
       <section id="view-rules" class="view" hidden>
         <nmui-card outlined>
-          <h2 class="card-title">Rules</h2>
-          <p>The rules detection layer arrives in Phase 4: new device, IT → Level 1
-          direct, writes from anyone but the HMI, and more — all evaluated against
-          the traffic this pipeline is already collecting.</p>
+          <h2 class="card-title">Detection rules — layer 1</h2>
+          <p id="rules-status" class="sim-status">Contacting the rules engine…</p>
+          <ul id="rules-list" class="rules-list"></ul>
+          <p class="dim">Pattern rules (new level crossing, rate spike, write outside
+          the pattern) stay silent until a baseline seals — about 150 packets into a
+          feed, or immediately when the store already holds history. Absolute rules
+          (new device, IT-to-controller, non-HMI write, threat intel) fire from the
+          first packet. Alerts appear in the Events log and flash on the map.</p>
+        </nmui-card>
+
+        <nmui-card outlined>
+          <h2 class="card-title">Attack scenarios — lab only</h2>
+          <p>One-click attack scripts, modeled on public reporting, run against the
+          simulated plant only. Start the simulation first and let it run a minute
+          so the baseline exists — then fire one and watch the Events log and map.
+          Every scenario should be caught; normal traffic should never be.</p>
+          <div id="scenario-list" class="scenario-list"></div>
+          <p id="scenario-status" class="sim-status"></p>
         </nmui-card>
       </section>
 
@@ -326,6 +342,54 @@
     showReplayStatus(await invoke('stop_replay'));
   });
   setInterval(refreshReplayStatus, 1000);
+
+  // ---- rules + scenarios --------------------------------------------------
+  const rulesStatusEl = document.getElementById('rules-status');
+  const rulesListEl = document.getElementById('rules-list');
+  const scenarioListEl = document.getElementById('scenario-list');
+  const scenarioStatusEl = document.getElementById('scenario-status');
+  let rulesRendered = false;
+
+  async function loadRules() {
+    if (!invoke) return;
+    try {
+      const s = await invoke('rules_status');
+      rulesStatusEl.textContent =
+        s.alerts_total + ' alert' + (s.alerts_total === 1 ? '' : 's') + ' raised so far · ' +
+        s.events_total + ' events stored · baseline ' +
+        (s.baseline_ready ? 'ready (from stored history)' : 'learning');
+      if (!rulesRendered) {
+        rulesRendered = true;
+        s.rules.forEach((r) => {
+          const li = document.createElement('li');
+          const strong = document.createElement('strong');
+          strong.textContent = r.name;
+          li.append(strong, document.createTextNode(' — ' + r.description));
+          rulesListEl.appendChild(li);
+        });
+        s.scenarios.forEach((sc) => {
+          const row = document.createElement('div');
+          row.className = 'scenario-row';
+          const btn = document.createElement('nmui-button');
+          btn.setAttribute('tonal', '');
+          btn.textContent = sc.title;
+          btn.addEventListener('click', async () => {
+            scenarioStatusEl.textContent = 'Running "' + sc.title + '" — watch Events and the Live map.';
+            try { await invoke('run_scenario', { name: sc.id }); }
+            catch (err) { scenarioStatusEl.textContent = 'Scenario failed: ' + err; }
+            setTimeout(loadRules, 4000);
+          });
+          const blurb = document.createElement('p');
+          blurb.className = 'dim';
+          blurb.textContent = sc.blurb;
+          row.append(btn, blurb);
+          scenarioListEl.appendChild(row);
+        });
+      }
+    } catch (err) { /* rules view is best-effort */ }
+  }
+  loadRules();
+  setInterval(loadRules, 5000);
 
   (async () => {
     if (!invoke) return;
@@ -580,15 +644,16 @@
     if (!dto.src_ip || !dto.dst_ip) return;
     const line = svg.querySelector('[data-pair="' + pairKey(dto.src_ip, dto.dst_ip) + '"]');
     if (line) {
-      line.classList.remove('pulse', 'pulse-write');
+      line.classList.remove('pulse', 'pulse-write', 'pulse-alert');
       void line.getBoundingClientRect();
-      line.classList.add(dto.kind === 'write' ? 'pulse-write' : 'pulse');
+      line.classList.add(
+        dto.kind === 'alert' ? 'pulse-alert' : dto.kind === 'write' ? 'pulse-write' : 'pulse');
     }
     [dto.src_ip, dto.dst_ip].forEach((ip) => {
       const node = svg.querySelector('[data-ip="' + ip + '"]');
       if (node) {
-        node.classList.add('active');
-        setTimeout(() => node.classList.remove('active'), 700);
+        node.classList.add(dto.kind === 'alert' ? 'alert-flash' : 'active');
+        setTimeout(() => node.classList.remove('active', 'alert-flash'), 700);
       }
     });
   }

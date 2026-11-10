@@ -10,14 +10,15 @@ phase, before anything destructive happens. It is built for the plants that
 can't afford enterprise OT security platforms: small utilities, water
 systems, and factories.
 
-> **Status: Phase 3 — PCAP replay + passive discovery.** The app ships
-> a built-in lab (five virtual devices generating real Modbus/TCP
-> frames) and the live Purdue map — and it now also replays packet
-> captures: open the bundled sample (a foreign plant Deadband knows
-> nothing about, devices discovered from the wire into the UNPLACED
-> strip and the Assets inventory) or any `.pcap` from your own
-> Wireshark work, all through the same pipeline. Detection lands
-> phase by phase; see the architecture below.
+> **Status: Phase 4 — rules layer.** The app ships a built-in lab
+> (five virtual devices generating real Modbus/TCP frames), the live
+> Purdue map, and PCAP replay with passive discovery — and now the
+> first detection layer is live: seven hard rules evaluated on every
+> packet (new device, IT-to-controller, writes from a non-HMI, new
+> level crossings, threat-intel matches, rate spikes, writes outside
+> the learned pattern), with one-click lab attack scenarios in the
+> Rules view to prove they fire — and a test suite that proves normal
+> traffic never does. The anomaly early-warning layer is next.
 
 ## Brand assets
 

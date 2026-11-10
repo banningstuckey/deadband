@@ -137,6 +137,10 @@ fn start_simulation(app: tauri::AppHandle, state: tauri::State<AppState>) -> Sim
     let running = Arc::clone(&state.running);
     std::thread::spawn(move || {
         let mut source = SimulatedSource::new(now_ms());
+        let mut rules = match store.lock() {
+            Ok(store) => deadband_core::detect::RulesLayer::from_store(&store),
+            Err(_) => deadband_core::detect::RulesLayer::new(),
+        };
         while running.load(Ordering::Relaxed) {
             for _ in 0..6 {
                 if !running.load(Ordering::Relaxed) {
@@ -144,7 +148,9 @@ fn start_simulation(app: tauri::AppHandle, state: tauri::State<AppState>) -> Sim
                 }
                 if let Some(packet) = source.next_packet() {
                     let events = match store.lock() {
-                        Ok(store) => deadband_core::engine::process_packet(&store, &packet),
+                        Ok(store) => deadband_core::engine::process_packet_with_rules(
+                            &store, &packet, &mut rules,
+                        ),
                         Err(_) => Vec::new(),
                     };
                     for event in &events {
@@ -251,6 +257,10 @@ fn start_replay(
     let running = Arc::clone(&state.replay_running);
     let info_handle = Arc::clone(&state.replay_info);
     std::thread::spawn(move || {
+        let mut rules = match store.lock() {
+            Ok(store) => deadband_core::detect::RulesLayer::from_store(&store),
+            Err(_) => deadband_core::detect::RulesLayer::new(),
+        };
         let mut previous_ts: Option<i64> = None;
         for (index, packet) in packets.iter().enumerate() {
             if !running.load(Ordering::Relaxed) {
@@ -269,7 +279,9 @@ fn start_replay(
                 data: packet.data.clone(),
             };
             let events = match store.lock() {
-                Ok(store) => deadband_core::engine::process_packet(&store, &shifted),
+                Ok(store) => deadband_core::engine::process_packet_with_rules(
+                    &store, &shifted, &mut rules,
+                ),
                 Err(_) => Vec::new(),
             };
             for event in &events {
@@ -298,6 +310,98 @@ fn stop_replay(state: tauri::State<AppState>) -> ReplayStatus {
 #[tauri::command]
 fn replay_status(state: tauri::State<AppState>) -> ReplayStatus {
     replay_status_of(&state)
+}
+
+/// One rule, for the Rules view.
+#[derive(Debug, Serialize)]
+struct RuleDto {
+    id: &'static str,
+    name: &'static str,
+    description: &'static str,
+}
+
+/// One attack scenario, for the Rules view buttons.
+#[derive(Debug, Serialize)]
+struct ScenarioDto {
+    id: &'static str,
+    title: &'static str,
+    blurb: &'static str,
+}
+
+/// Everything the Rules view shows.
+#[derive(Debug, Serialize)]
+struct RulesStatus {
+    alerts_total: i64,
+    events_total: i64,
+    baseline_ready: bool,
+    rules: Vec<RuleDto>,
+    scenarios: Vec<ScenarioDto>,
+}
+
+/// The rules catalog, scenario catalog, and alert counters.
+#[tauri::command]
+fn rules_status(state: tauri::State<AppState>) -> RulesStatus {
+    let (alerts_total, events_total) = state
+        .store
+        .lock()
+        .map(|store| {
+            (
+                store.alert_count().unwrap_or(0),
+                deadband_core::engine::stats(&store).events,
+            )
+        })
+        .unwrap_or((0, 0));
+    RulesStatus {
+        alerts_total,
+        events_total,
+        baseline_ready: events_total >= deadband_core::detect::BASELINE_EVENTS,
+        rules: deadband_core::detect::rule_catalog()
+            .iter()
+            .map(|r| RuleDto { id: r.id, name: r.name, description: r.description })
+            .collect(),
+        scenarios: deadband_core::scenarios::catalog()
+            .iter()
+            .map(|s| ScenarioDto { id: s.id, title: s.title, blurb: s.blurb })
+            .collect(),
+    }
+}
+
+/// Runs a lab attack scenario through the pipeline with the rules
+/// armed. Returns false for an unknown scenario id. The scenario's
+/// packets are generated frames for the lab only — nothing is ever
+/// transmitted anywhere (passive-only rule).
+#[tauri::command]
+fn run_scenario(app: tauri::AppHandle, state: tauri::State<AppState>, name: String) -> bool {
+    let Some(packets) = deadband_core::scenarios::packets(&name, now_ms()) else {
+        return false;
+    };
+    let store = Arc::clone(&state.store);
+    std::thread::spawn(move || {
+        let mut rules = match store.lock() {
+            Ok(store) => deadband_core::detect::RulesLayer::from_store(&store),
+            Err(_) => deadband_core::detect::RulesLayer::new(),
+        };
+        let mut previous_ts: Option<i64> = None;
+        for packet in &packets {
+            if let Some(previous) = previous_ts {
+                let delta = ((packet.timestamp_ms - previous).max(0) / 4).min(250) as u64;
+                if delta > 0 {
+                    std::thread::sleep(std::time::Duration::from_millis(delta));
+                }
+            }
+            previous_ts = Some(packet.timestamp_ms);
+            let events = match store.lock() {
+                Ok(store) => deadband_core::engine::process_packet_with_rules(
+                    &store, packet, &mut rules,
+                ),
+                Err(_) => Vec::new(),
+            };
+            for event in &events {
+                let _ = app.emit("traffic", EventDto::from(event));
+            }
+        }
+    });
+    true
 }
 
 /// The most recent stored events (newest first) — the log's backlog
@@ -434,7 +538,9 @@ pub fn run() {
             network_snapshot,
             start_replay,
             stop_replay,
-            replay_status
+            replay_status,
+            rules_status,
+            run_scenario
         ])
         .run(tauri::generate_context!())
         .expect("error while running Deadband");

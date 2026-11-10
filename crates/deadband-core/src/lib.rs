@@ -38,6 +38,7 @@ pub mod model;
 pub mod parse;
 pub mod pcap;
 pub mod sample;
+pub mod scenarios;
 pub mod sim;
 pub mod source;
 pub mod store;
@@ -62,7 +63,7 @@ pub fn engine_status() -> EngineStatus {
     EngineStatus {
         name: "Deadband",
         version: env!("CARGO_PKG_VERSION"),
-        phase: "Phase 3 — PCAP replay + discovery",
+        phase: "Phase 4 — rules layer",
         detection_layers: ["rules", "anomaly", "analyst"],
     }
 }
@@ -76,6 +77,6 @@ mod tests {
         let status = engine_status();
         assert_eq!(status.name, "Deadband");
         assert_eq!(status.detection_layers.len(), 3);
-        assert!(status.phase.starts_with("Phase 3"));
+        assert!(status.phase.starts_with("Phase 4"));
     }
 }

@@ -101,6 +101,8 @@ ol.levels li span { color: var(--md-sys-color-on-surface-variant); }
 .card-actions { margin-top: 12px; }
 
 .rail-brand { padding: 4px 8px; letter-spacing: 0.06em; }
+.rail-head { display: flex; align-items: center; gap: 6px; }
+.rail-mark { width: 36px; height: 36px; border-radius: 9px; display: block; margin-left: 8px; }
 
 footer.note { color: var(--md-sys-color-on-surface-variant); font-size: 12px; }
 
@@ -160,6 +162,12 @@ footer.note { color: var(--md-sys-color-on-surface-variant); font-size: 12px; }
 #purdue-map .conduit:hover { opacity: 1; stroke: var(--md-sys-color-primary); }
 #purdue-map .conduit.pulse { animation: conduitPulse 0.8s ease-out; }
 #purdue-map .conduit.pulse-write { animation: conduitPulseWrite 0.8s ease-out; }
+#purdue-map .conduit.pulse-alert { animation: conduitPulseAlert 0.9s ease-out; }
+@keyframes conduitPulseAlert {
+  0% { stroke: var(--md-sys-color-error); opacity: 1; filter: drop-shadow(0 0 6px var(--md-sys-color-error)); }
+  100% { filter: none; }
+}
+#purdue-map .node.alert-flash rect { stroke: var(--md-sys-color-error); stroke-width: 2.5; }
 @keyframes conduitPulse {
   0% { stroke: var(--md-sys-color-primary); opacity: 1; filter: drop-shadow(0 0 5px var(--md-sys-color-primary)); }
   100% { filter: none; }
@@ -181,6 +189,13 @@ footer.note { color: var(--md-sys-color-on-surface-variant); font-size: 12px; }
 #purdue-map .n-sub { font-size: 10.5px; fill: var(--md-sys-color-on-surface-variant); }
 
 .detail-events { margin: 8px 0 2px; padding-left: 18px; line-height: 1.8; font-size: 13px; }
+
+/* Rules view */
+.rules-list { margin: 8px 0; padding-left: 18px; line-height: 1.75; font-size: 13.5px; }
+.rules-list strong { color: var(--md-sys-color-on-surface); }
+.scenario-list { display: grid; gap: 14px; margin-top: 10px; }
+.scenario-row { display: grid; gap: 4px; justify-items: start; }
+.scenario-row p { margin: 0; }
 
 /* Replay controls */
 .replay-controls { align-items: center; flex-wrap: wrap; }
