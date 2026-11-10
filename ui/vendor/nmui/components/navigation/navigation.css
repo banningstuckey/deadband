@@ -1,0 +1,533 @@
+/* nmui-navigation — M3 Expressive navigation. The rail: collapsed (96dp)
+   replaces the old baseline rail; expanded runs 220–360dp. Colors and
+   measurements follow the navigation rail spec tokens.
+
+   Switching variants animates everything on the 250ms
+   medium-effects spring (no overshoot, so no bounce): the width,
+   and the destinations morphing with it — one indicator (::before)
+   whose width/height interpolate between the full-item pill
+   (expanded) and the 56×32 pill (collapsed). The collapsed state
+   centers icon, pill, and label on the rail's centerline, not with
+   percentage positioning but with the spec's 12px side padding
+   plus fixed pixel offsets — so nothing resolves against the
+   animating width and nothing can overshoot. Item heights and
+   paddings transition on the same curve. Labels are the one thing
+   that can't morph (beside the icon ↔ under it), so they flash
+   out and back in during the switch. */
+
+nmui-navigation[rail] {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  height: 100%;
+  background: var(--md-sys-color-surface, #fef7ff);
+  color: var(--md-sys-color-on-surface, #1c1b1f);
+  transition: width var(--md-sys-motion-spring-medium-effects, 250ms cubic-bezier(0.2, 0, 0, 1));
+}
+
+nmui-navigation[rail][collapsed] {
+  width: 96px;
+}
+
+nmui-navigation[rail][expanded] {
+  width: 280px;
+}
+
+/* The header's contents (menu button, brand, FAB) have no geometry
+   to morph, so the header takes the target variant's width from the
+   first frame, anchored to the inline-start edge, and the host
+   clips it while its own width eases. The destinations below
+   instead track the host's animated width and morph. */
+nmui-navigation[rail][switching] {
+  overflow: hidden;
+}
+
+nmui-navigation[rail][collapsed] > header {
+  width: 96px;
+  box-sizing: border-box;
+}
+
+nmui-navigation[rail][expanded] > header {
+  width: 280px;
+  box-sizing: border-box;
+}
+
+/************
+ * Header   *  Menu button / brand (authored) and the FAB live here,
+ ************  always at the top. */
+
+nmui-navigation[rail] > header {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px 16px 0;
+}
+
+nmui-navigation[rail][collapsed] > header {
+  align-items: center;
+  padding-inline: 0;
+}
+
+nmui-navigation[rail][expanded] > header {
+  align-items: stretch;
+}
+
+/*****************
+ * Destinations  *
+ *****************/
+
+nmui-navigation[rail] > destinations {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  margin-top: 20px;
+  overflow-y: auto;
+  transition:
+    padding-inline-start var(--md-sys-motion-spring-medium-effects, 250ms cubic-bezier(0.2, 0, 0, 1)),
+    padding-inline-end var(--md-sys-motion-spring-medium-effects, 250ms cubic-bezier(0.2, 0, 0, 1)),
+    gap var(--md-sys-motion-spring-medium-effects, 250ms cubic-bezier(0.2, 0, 0, 1));
+}
+
+/* With no header, the spec's top space stands in for it. */
+nmui-navigation[rail]:not(:has(> header)) > destinations {
+  margin-top: 44px;
+}
+
+nmui-navigation[rail][center] > destinations {
+  justify-content: center;
+}
+
+nmui-navigation[rail][collapsed] > destinations {
+  gap: 4px;
+  padding-inline: 12px;
+}
+
+nmui-navigation[rail][expanded] > destinations {
+  gap: 6px;
+  padding-inline: 16px;
+}
+
+nmui-navigation[rail] > destinations :is(a, button) {
+  position: relative;
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  cursor: pointer;
+  font: var(--md-sys-typescale-label-large, 500 14px/20px system-ui, sans-serif);
+  color: var(--md-sys-color-on-surface-variant, #49454f);
+  background: none;
+  border: 0;
+  padding: 0;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+  /* A stacking context, so the indicator (::before, z-index -1)
+     paints behind the label text instead of covering it. */
+  isolation: isolate;
+  transition:
+    height var(--md-sys-motion-spring-medium-effects, 250ms cubic-bezier(0.2, 0, 0, 1)),
+    padding-inline-start var(--md-sys-motion-spring-medium-effects, 250ms cubic-bezier(0.2, 0, 0, 1));
+}
+
+/* The label rides its own element. While the variant is switching
+   it drops out in 60ms; it comes back in an 80ms flash the moment
+   the rail is wide enough for the text again — mid-flight, not
+   after the width has settled. Icons never fade. */
+nmui-navigation[rail] > destinations :is(a, button) > label {
+  cursor: inherit;
+  transition: opacity 80ms ease;
+}
+
+nmui-navigation[rail][labels-out] > destinations :is(a, button) > label {
+  opacity: 0;
+  transition: opacity 60ms ease;
+}
+
+/* The icon: outlined while inactive, filled on the selected
+   destination; a second icon marked [selected] swaps the glyph. */
+nmui-navigation[rail] > destinations :is(a, button) > indicator > icon {
+  font-size: 24px;
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 24;
+}
+
+nmui-navigation[rail] > destinations :is(a, button)[selected] > indicator > icon {
+  font-variation-settings:
+    "FILL" 1,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 24;
+}
+
+nmui-navigation[rail] > destinations :is(a, button):not([selected]) > indicator > icon[selected] {
+  display: none;
+}
+
+nmui-navigation[rail] > destinations :is(a, button)[selected] > indicator > icon[selected] {
+  display: inline-flex;
+}
+
+nmui-navigation[rail] > destinations :is(a, button)[selected] > indicator:has(> icon[selected]) > icon:not([selected]) {
+  display: none;
+}
+
+/* The indicator is ONE element in both variants — the item's
+   ::before — and its positions are fixed pixel values in each
+   variant, derived from the spec padding (collapsed destinations
+   carry 12px on each side of the 96px rail, leaving a 72px content
+   box; the 56px pill sits at left 8 inside it, the icon at left
+   24, the label centered — all on the rail's centerline). Fixed
+   pixels interpolate monotonically; the earlier centered geometry
+   used left: calc(50% - …), and that percentage resolves against
+   the item width WHILE the item itself is animating, so the
+   pill/icon overshot their final spot and settled back — the
+   bounce. */
+nmui-navigation[rail] > destinations :is(a, button)::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  border-radius: var(--md-sys-shape-corner-full, 999px);
+  background-color: transparent;
+  transition:
+    left var(--md-sys-motion-spring-medium-effects, 250ms cubic-bezier(0.2, 0, 0, 1)),
+    width var(--md-sys-motion-spring-medium-effects, 250ms cubic-bezier(0.2, 0, 0, 1)),
+    top var(--md-sys-motion-spring-medium-effects, 250ms cubic-bezier(0.2, 0, 0, 1)),
+    height var(--md-sys-motion-spring-medium-effects, 250ms cubic-bezier(0.2, 0, 0, 1)),
+    background-color var(--md-sys-motion-spring-fast-effects, 200ms cubic-bezier(0.2, 0, 0, 1));
+}
+
+nmui-navigation[rail] > destinations :is(a, button):hover::before {
+  background-color: color-mix(in srgb,
+    var(--md-sys-color-on-surface-variant, #49454f) 8%, transparent);
+}
+
+nmui-navigation[rail] > destinations :is(a, button)[selected]::before {
+  background-color: var(--md-sys-color-secondary-container, #e8def8);
+}
+
+nmui-navigation[rail] > destinations :is(a, button) > indicator {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    left var(--md-sys-motion-spring-medium-effects, 250ms cubic-bezier(0.2, 0, 0, 1)),
+    top var(--md-sys-motion-spring-medium-effects, 250ms cubic-bezier(0.2, 0, 0, 1));
+}
+
+/**************************
+ * Secondary groups       *  A <section> groups secondary
+ **************************  destinations under the destination
+   before it — its toggle "parent", which gains a caret. Groups
+   start closed and open inline ([open]); the collapsed rail
+   hides them whole and the parent stands for them. */
+
+/* The toggle parent's caret: trailing edge, flipped while open.
+   Hidden in the collapsed rail, where the parent is icon-only. */
+nmui-navigation[rail] > destinations :is(a, button) > icon[caret] {
+  margin-inline-start: auto;
+  transition:
+    transform var(--md-sys-motion-spring-medium-effects, 250ms cubic-bezier(0.2, 0, 0, 1));
+}
+
+nmui-navigation[rail] > destinations :is(a, button):has(+ section[open]) > icon[caret] {
+  transform: rotate(180deg);
+}
+
+nmui-navigation[rail][collapsed] > destinations :is(a, button) > icon[caret] {
+  display: none;
+}
+
+nmui-navigation[rail][collapsed] > destinations section {
+  display: none;
+}
+
+nmui-navigation[rail][expanded] > destinations section {
+  display: none;
+}
+
+nmui-navigation[rail][expanded] > destinations section[open] {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* While a group is sliding (height animating in the component),
+   its content is clipped to the box — without this, the rows
+   paint past the shrinking bottom edge and overlap the
+   destinations moving up underneath. */
+nmui-navigation[rail][expanded] > destinations section[data-sliding] {
+  overflow: hidden;
+}
+
+nmui-navigation[rail][expanded] > destinations section[title]::before {
+  content: attr(title);
+  font: var(--md-sys-typescale-title-small, 500 14px/20px system-ui, sans-serif);
+  color: var(--md-sys-color-on-surface, #1c1b1f);
+  padding: 8px 0 2px 48px;
+}
+
+/**************************
+ * Collapsed: the pill    *  Indicator 56×32 around the icon, label
+ **************************  underneath, centered on the rail
+   via the 12px side padding. Item height 64. */
+
+nmui-navigation[rail][collapsed] > destinations :is(a, button) {
+  height: 64px;
+  flex: none;
+  font: var(--md-sys-typescale-label-medium, 500 12px/16px system-ui, sans-serif);
+}
+
+nmui-navigation[rail][collapsed] > destinations :is(a, button)::before {
+  left: 8px;
+  top: 6px;
+  width: 56px;
+  height: 32px;
+}
+
+nmui-navigation[rail][collapsed] > destinations :is(a, button) > indicator {
+  left: 24px;
+  top: 10px;
+}
+
+nmui-navigation[rail][collapsed] > destinations :is(a, button) > label {
+  position: absolute;
+  top: 42px;
+  left: 0;
+  width: 100%;
+  text-align: center;
+}
+
+nmui-navigation[rail][collapsed] > destinations :is(a, button)[selected] {
+  color: var(--md-sys-color-secondary, #625b71);
+}
+
+nmui-navigation[rail][collapsed] > destinations :is(a, button)[selected] > indicator {
+  color: var(--md-sys-color-on-secondary-container, #4a4458);
+}
+
+nmui-navigation[rail][collapsed] > destinations :is(a, button):focus-visible {
+  outline: none;
+}
+
+nmui-navigation[rail][collapsed] > destinations :is(a, button):focus-visible::before {
+  box-shadow: 0 0 0 2px var(--md-sys-color-primary, #6750a4);
+}
+
+/***************************
+ * Expanded: the pill is   *  the whole item — 56 tall, icon leading,
+ ***************************  label beside it inside the pill. */
+
+nmui-navigation[rail][expanded] > destinations :is(a, button) {
+  height: 56px;
+  flex: none;
+  padding-inline-start: 48px;
+  padding-inline-end: 16px;
+  border-radius: var(--md-sys-shape-corner-full, 999px);
+}
+
+nmui-navigation[rail][expanded] > destinations :is(a, button)::before {
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+}
+
+nmui-navigation[rail][expanded] > destinations :is(a, button) > indicator {
+  left: 16px;
+  top: calc(50% - 12px);
+}
+
+nmui-navigation[rail][expanded] > destinations :is(a, button)[selected] {
+  color: var(--md-sys-color-on-secondary-container, #4a4458);
+}
+
+nmui-navigation[rail][expanded] > destinations :is(a, button):focus-visible {
+  outline: 2px solid var(--md-sys-color-primary, #6750a4);
+  outline-offset: -2px;
+}
+
+/**************************
+ * Bar — flexible, M3E    *  The live overview says the flexible bar
+ **************************  replaces the baseline bar, which is no
+   longer recommended, so this is the only bar built: 64dp tall
+   (the height itself is corroborated by implementation summaries,
+   not printed on the overview page), surface-container, no shadow.
+   The 64×32 pill is the baseline indicator size, carried over —
+   the overview prints no flexible indicator size. 3–5 destinations,
+   equally distributed, icon 24dp. Selected label is secondary, per
+   the M3E overview change (and the collapsed rail, which already
+   does this); selected icon is on-secondary-container on the
+   secondary-container pill; unselected is on-surface-variant. */
+
+nmui-navigation[bar] {
+  display: flex;
+  width: 100%;
+  background: var(--md-sys-color-surface-container, #f3edf7);
+  color: var(--md-sys-color-on-surface-variant, #49454f);
+}
+
+nmui-navigation[bar] > destinations {
+  display: flex;
+  width: 100%;
+}
+
+nmui-navigation[bar] > destinations :is(a, button) {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 64px;
+  padding-block: 6px;
+  box-sizing: border-box;
+  font: var(--md-sys-typescale-label-medium, 500 12px/16px system-ui, sans-serif);
+  color: var(--md-sys-color-on-surface-variant, #49454f);
+  background: none;
+  border: 0;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+  isolation: isolate;
+}
+
+nmui-navigation[bar] > destinations :is(a, button) > indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 32px;
+  flex: none;
+  border-radius: var(--md-sys-shape-corner-full, 999px);
+  transition: background-color var(--md-sys-motion-spring-fast-effects, 200ms cubic-bezier(0.2, 0, 0, 1));
+}
+
+/* Outlined while inactive, filled on the selected destination;
+   a second icon marked [selected] swaps the glyph, like the rail. */
+nmui-navigation[bar] > destinations :is(a, button) > indicator > icon {
+  font-size: 24px;
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 24;
+}
+
+nmui-navigation[bar] > destinations :is(a, button)[selected] > indicator > icon {
+  font-variation-settings:
+    "FILL" 1,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 24;
+}
+
+nmui-navigation[bar] > destinations :is(a, button):not([selected]) > indicator > icon[selected] {
+  display: none;
+}
+
+nmui-navigation[bar] > destinations :is(a, button)[selected] > indicator > icon[selected] {
+  display: inline-flex;
+}
+
+nmui-navigation[bar] > destinations :is(a, button)[selected] > indicator:has(> icon[selected]) > icon:not([selected]) {
+  display: none;
+}
+
+nmui-navigation[bar] > destinations :is(a, button):hover > indicator {
+  background-color: color-mix(in srgb,
+    var(--md-sys-color-on-surface-variant, #49454f) 8%, transparent);
+}
+
+nmui-navigation[bar] > destinations :is(a, button)[selected] > indicator {
+  background-color: var(--md-sys-color-secondary-container, #e8def8);
+}
+
+nmui-navigation[bar] > destinations :is(a, button)[selected] > indicator > icon {
+  color: var(--md-sys-color-on-secondary-container, #4a4458);
+}
+
+nmui-navigation[bar] > destinations :is(a, button)[selected] {
+  color: var(--md-sys-color-secondary, #625b71);
+}
+
+nmui-navigation[bar] > destinations :is(a, button):focus-visible {
+  outline: 2px solid var(--md-sys-color-primary, #6750a4);
+  outline-offset: -2px;
+}
+
+/* Label behaviour: all by default. [labels-selected] shows only
+   the selected label, [labels-none] shows none; icon-only items
+   center their pill in the 64dp bar. */
+nmui-navigation[bar][labels-selected] > destinations :is(a, button):not([selected]) > label,
+nmui-navigation[bar][labels-none] > destinations :is(a, button) > label {
+  display: none;
+}
+
+nmui-navigation[bar][labels-selected] > destinations :is(a, button):not([selected]),
+nmui-navigation[bar][labels-none] > destinations :is(a, button) {
+  justify-content: center;
+}
+
+/* Medium windows (600dp and up, per the overview's window sizes):
+   destinations lay out horizontally — icon beside label — centred
+   as a group instead of stretched across the bar. */
+@media (min-width: 600px) {
+  nmui-navigation[bar] > destinations {
+    justify-content: center;
+  }
+
+  nmui-navigation[bar] > destinations :is(a, button) {
+    flex: none;
+    flex-direction: row;
+    padding-inline: 16px;
+  }
+}
+
+/************
+ * Modal    *  Overlays the content on a scrim, hidden until [open].
+ ************/
+
+nmui-navigation[rail][modal] {
+  position: fixed;
+  inset-inline-start: 0;
+  top: 0;
+  z-index: 100;
+  height: 100dvh;
+  background: var(--md-sys-color-surface-container, #f3edf7);
+  box-shadow: var(--md-sys-elevation-level2,
+    0 1px 2px rgb(0 0 0 / 0.3), 0 2px 6px 2px rgb(0 0 0 / 0.15));
+  transform: translateX(-105%);
+  visibility: hidden;
+  transition:
+    transform var(--md-sys-motion-spring-medium-effects, 250ms cubic-bezier(0.2, 0, 0, 1)),
+    visibility 0s 250ms;
+}
+
+nmui-navigation[rail][modal][open] {
+  transform: none;
+  visibility: visible;
+  transition:
+    transform var(--md-sys-motion-spring-medium-effects, 250ms cubic-bezier(0.2, 0, 0, 1)),
+    visibility 0s 0s;
+}
+
+nmui-navigation[rail][modal] + scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+  background: color-mix(in srgb,
+    var(--md-sys-color-on-surface, #1c1b1f) 32%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--md-sys-motion-spring-fast-effects, 200ms cubic-bezier(0.2, 0, 0, 1));
+}
+
+nmui-navigation[rail][modal][open] + scrim {
+  opacity: 1;
+  pointer-events: auto;
+}

@@ -1,0 +1,153 @@
+/* nmui base — mount point and page defaults. No tokens here, just structure. */
+
+app {
+  display: flex;
+  height: 100dvh;
+}
+
+app > main {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--md-sys-color-background, #fffbfe);
+  color: var(--md-sys-color-on-background, #1c1b1f);
+  font: var(--md-sys-typescale-body-large, 400 16px/24px system-ui, sans-serif);
+}
+
+/* Theme swaps cross-fade instead of flashing. */
+body,
+app {
+  transition: background-color 200ms cubic-bezier(0.2, 0, 0, 1),
+    color 200ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Demo-app shell chrome: the brand row inside the rail's header.
+   The rail itself is the component; these styles are the app's own. */
+#app-rail .rail-brand-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-inline: 8px;
+}
+
+#app-rail .rail-brand {
+  width: 32px;
+  height: auto;
+  display: block;
+}
+
+#app-rail .rail-tools {
+  display: flex;
+  gap: 4px;
+}
+
+#app-rail[collapsed] .rail-title {
+  display: none;
+}
+
+/* The NATIVE MUI wordmark: live text in the logo's own colors —
+   NATIVE in deep indigo, MUI in plum (sampled from the supplied
+   logo art). Lightened under the dark theme so it stays legible.
+   These are HARD RULES (!important on purpose): the wordmark sits
+   on type elements whose typescale `font:` shorthand resets
+   weight/stretch and whose section rules set their own color, so
+   plain declarations lose. Nothing overrides the brand. */
+.brand-word {
+  color: #233670 !important;
+  letter-spacing: 0.02em;
+  font-weight: bold !important;
+  font-stretch: semi-expanded !important;
+}
+
+.brand-word > span {
+  color: #751f81 !important;
+}
+
+:root[theme="dark"] .brand-word {
+  color: #93a5e8 !important;
+}
+
+:root[theme="dark"] .brand-word > span {
+  color: #d78ede !important;
+}
+
+#app-rail[collapsed] .rail-brand-row {
+  padding-inline: 0;
+}
+
+/* Compact shell: a top bar stands in for the rail (which becomes
+   a modal overlay under 600px — see applyShellMode in app.js).
+   Hidden at every wider size, where the docked rail's own header
+   carries the brand and the tools. */
+.app-topbar {
+  display: none;
+}
+
+@media (max-width: 599px) {
+  app {
+    flex-direction: column;
+  }
+
+  .app-topbar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 0 0 auto;
+    height: 56px;
+    padding-inline: 4px 8px;
+    box-sizing: border-box;
+    background: var(--md-sys-color-surface, #fef7ff);
+    border-bottom: 1px solid var(--md-sys-color-outline-variant, #cac4d0);
+  }
+
+  .app-topbar .rail-brand {
+    width: 28px;
+    height: auto;
+    display: block;
+  }
+
+  .app-topbar .topbar-title {
+    margin-inline-end: auto;
+  }
+}
+
+/* Icons — Material Symbols ligatures in an <icon> element. The font is
+   loaded by the app (see index.html). Filled is the default;
+   <icon outline> flips the FILL axis off. */
+icon {
+  font-family: "Material Symbols Rounded";
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  font-variation-settings:
+    "FILL" 1,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 24;
+}
+
+icon[outline] {
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 24;
+}

@@ -1,0 +1,170 @@
+/* nmui-card — M3 card. Three variants, one element.
+
+   Spec values (cards/specs): shape 12dp corner radius;
+   left/right padding 16dp (16 all around here — the table
+   doesn't print top/bottom, and 16 keeps the card even);
+   label text start-aligned (the default). Colors: elevated =
+   surface-container-low, filled = surface-container-highest,
+   outlined = surface with an outline-variant border. Elevations:
+   elevated rests at level 1 and rises to level 2 on hover;
+   filled and outlined rest at level 0 and rise to level 1 on
+   hover. Bare <nmui-card> is elevated.
+
+   States: hover is the elevation change above. Pressed tints
+   the container 12% toward on-surface — the M3 state-layer
+   opacity for pressed (hover 8 / focus 12 / pressed 12 /
+   dragged 16 is the system's scale; the specs page lists the
+   states but doesn't print their values as text, so the tint
+   follows the scale rather than a card-specific token).
+   Focused gets a visible outline, since a clickable card is
+   keyboard-focusable. Disabled fades the content to 38% and
+   drops the shadow; dragging is app behavior, not the
+   component's. Content is free light DOM — headline, body,
+   actions, media, whatever the card holds. */
+
+nmui-card {
+  display: block;
+  border-radius: var(--md-sys-shape-corner-medium, 12px);
+  padding: 16px;
+  box-sizing: border-box;
+  color: var(--md-sys-color-on-surface, #1c1b1f);
+  transition:
+    box-shadow var(--md-sys-motion-spring-fast-effects, 200ms cubic-bezier(0.2, 0, 0, 1)),
+    background-color var(--md-sys-motion-spring-fast-effects, 200ms cubic-bezier(0.2, 0, 0, 1));
+}
+
+nmui-card[elevated],
+nmui-card:not([filled]):not([outlined]) {
+  background-color: var(--md-sys-color-surface-container-low, #f7f2fa);
+  box-shadow: var(--md-sys-elevation-level1, 0 1px 2px rgb(0 0 0 / 0.3));
+}
+
+nmui-card[elevated][href]:hover,
+nmui-card:not([filled]):not([outlined])[href]:hover {
+  box-shadow: var(--md-sys-elevation-level2, 0 2px 6px 2px rgb(0 0 0 / 0.15));
+}
+
+nmui-card[elevated][href]:active,
+nmui-card:not([filled]):not([outlined])[href]:active {
+  background-color: color-mix(in srgb,
+    var(--md-sys-color-surface-container-low, #f7f2fa) 88%,
+    var(--md-sys-color-on-surface, #1c1b1f));
+}
+
+nmui-card[filled] {
+  background-color: var(--md-sys-color-surface-container-highest, #e6e0e9);
+  box-shadow: var(--md-sys-elevation-level0, none);
+}
+
+nmui-card[filled][href]:hover {
+  box-shadow: var(--md-sys-elevation-level1, 0 1px 2px rgb(0 0 0 / 0.3));
+}
+
+nmui-card[filled][href]:active {
+  background-color: color-mix(in srgb,
+    var(--md-sys-color-surface-container-highest, #e6e0e9) 88%,
+    var(--md-sys-color-on-surface, #1c1b1f));
+}
+
+nmui-card[outlined] {
+  background-color: var(--md-sys-color-surface, #fef7ff);
+  border: 1px solid var(--md-sys-color-outline-variant, #cac4d0);
+  box-shadow: var(--md-sys-elevation-level0, none);
+}
+
+nmui-card[outlined][href]:hover {
+  box-shadow: var(--md-sys-elevation-level1, 0 1px 2px rgb(0 0 0 / 0.3));
+}
+
+nmui-card[outlined][href]:active {
+  background-color: color-mix(in srgb,
+    var(--md-sys-color-surface, #fef7ff) 88%,
+    var(--md-sys-color-on-surface, #1c1b1f));
+}
+
+/* Directly actionable cards only: the ripple clips to the card,
+   so the card needs its own positioning and overflow. (Overflow
+   hidden would clip anything straddling the card's edge, so it
+   stays off non-actionable cards.) */
+nmui-card[href] {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+nmui-card:focus-visible {
+  outline: 2px solid var(--md-sys-color-primary, #6750a4);
+  outline-offset: 2px;
+}
+
+/* Ripple — press feedback on directly actionable cards only.
+   JS sets --ripple-x/--ripple-y/--ripple-size and [rippling];
+   ::after expands from the press point and fades. currentColor
+   is on-surface, so it reads on every card background. ::after
+   (not a child node) keeps the card's :first-child/:last-child
+   margin rules intact. */
+nmui-card[rippling]::after {
+  content: "";
+  position: absolute;
+  left: var(--ripple-x, 50%);
+  top: var(--ripple-y, 50%);
+  width: var(--ripple-size, 0);
+  height: var(--ripple-size, 0);
+  transform: translate(-50%, -50%) scale(0.15);
+  border-radius: 50%;
+  background-color: currentColor;
+  pointer-events: none;
+  animation: nmui-card-ripple 450ms cubic-bezier(0.2, 0, 0, 1) forwards;
+}
+
+@keyframes nmui-card-ripple {
+  from { transform: translate(-50%, -50%) scale(0.15); opacity: 0.12; }
+  to { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+}
+
+/* Disabled must out-specify the variant rules (the bare-elevated
+   rule carries two :not() attributes), so each variant is
+   listed. Content fades to 38%, the shadow drops, and the card
+   stops responding. */
+nmui-card[disabled],
+nmui-card[elevated][disabled],
+nmui-card[filled][disabled],
+nmui-card[outlined][disabled],
+nmui-card:not([filled]):not([outlined])[disabled] {
+  box-shadow: var(--md-sys-elevation-level0, none);
+  cursor: default;
+  pointer-events: none;
+}
+
+nmui-card[disabled] > * {
+  opacity: 0.38;
+}
+
+/* Dragged: the card rises to level 3. Every variant is listed
+   (same specificity reason as the disabled rule). Dragging is
+   app behavior — the app sets [dragging] while it drags, the
+   card only owns the look. A natively draggable card gets a
+   grab cursor; while dragging it grabs. */
+nmui-card[dragging],
+nmui-card[elevated][dragging],
+nmui-card[filled][dragging],
+nmui-card[outlined][dragging],
+nmui-card:not([filled]):not([outlined])[dragging] {
+  box-shadow: var(--md-sys-elevation-level3, 0 4px 8px 3px rgb(0 0 0 / 0.15));
+}
+
+nmui-card[draggable="true"] {
+  cursor: grab;
+}
+
+nmui-card[dragging] {
+  cursor: grabbing;
+}
+
+nmui-card > :first-child {
+  margin-top: 0;
+}
+
+nmui-card > :last-child {
+  margin-bottom: 0;
+}

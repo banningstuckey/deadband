@@ -1,0 +1,52 @@
+/* Deadband Industrial — an nmui theme.
+   Generated from the nmui theming tool's Industrial Dark preset
+   (nmui v0.40.0). Use it: this file is linked from ui/index.html
+   after the nmui foundation CSS, and <html theme="deadband-industrial">
+   selects it. Charcoal surfaces, steel-blue primary, amber tertiary,
+   squarer corners — and error stays red, because on a console red
+   is not a brand color.
+*/
+
+:root[theme="deadband-industrial"] {
+  --md-sys-color-primary: #7dd3fc;
+  --md-sys-color-on-primary: #082f49;
+  --md-sys-color-primary-container: #0c4a6e;
+  --md-sys-color-on-primary-container: #e0f2fe;
+  --md-sys-color-secondary: #94a3b8;
+  --md-sys-color-on-secondary: #0f172a;
+  --md-sys-color-secondary-container: #1e293b;
+  --md-sys-color-on-secondary-container: #e2e8f0;
+  --md-sys-color-tertiary: #fbbf24;
+  --md-sys-color-on-tertiary: #451a03;
+  --md-sys-color-tertiary-container: #713f12;
+  --md-sys-color-on-tertiary-container: #fef3c7;
+  --md-sys-color-error: #f87171;
+  --md-sys-color-on-error: #450a0a;
+  --md-sys-color-error-container: #7f1d1d;
+  --md-sys-color-on-error-container: #fecaca;
+  --md-sys-color-surface: #111827;
+  --md-sys-color-on-surface: #f3f4f6;
+  --md-sys-color-surface-variant: #1f2937;
+  --md-sys-color-on-surface-variant: #d1d5db;
+  --md-sys-color-surface-container-lowest: #030712;
+  --md-sys-color-surface-container-low: #0b1220;
+  --md-sys-color-surface-container: #111827;
+  --md-sys-color-surface-container-high: #1f2937;
+  --md-sys-color-surface-container-highest: #374151;
+  --md-sys-color-inverse-surface: #e5e7eb;
+  --md-sys-color-inverse-on-surface: #111827;
+  --md-sys-color-inverse-primary: #38bdf8;
+  --md-sys-color-outline: #6b7280;
+  --md-sys-color-outline-variant: #374151;
+  --md-sys-color-background: #111827;
+  --md-sys-color-on-background: #f3f4f6;
+  --md-sys-color-shadow: #000000;
+  --md-sys-color-scrim: #000000;
+  --md-sys-shape-corner-none: 0;
+  --md-sys-shape-corner-extra-small: 2px;
+  --md-sys-shape-corner-small: 4px;
+  --md-sys-shape-corner-medium: 6px;
+  --md-sys-shape-corner-large: 8px;
+  --md-sys-shape-corner-extra-large: 12px;
+  --md-sys-shape-corner-full: 999px;
+}

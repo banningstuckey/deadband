@@ -1,0 +1,60 @@
+/* nmui-badge — M3 badge. The host wraps the anchor; <dot> is the
+   badge itself. No size attribute: size follows content, as in
+   M3 — empty is the small badge, text is the large badge.
+
+   Spec values (badges/specs, measurements table): small badge
+   6x6 with a 3dp corner radius (a circle); large badge 16 tall
+   with an 8dp corner radius (a stadium — full radius here gives
+   the same shape), 16 wide for one digit, 16x34 for the max four
+   characters, 4dp between badge and text container (so 4dp
+   padding each side). Label type is label-small. Colors are
+   error / on-error.
+
+   Placement is measured from the anchor's top-trailing corner
+   to the badge's bottom-leading corner: 6x6 for small, 14x12
+   for large. Small therefore tucks exactly into the anchor's
+   corner (its own top-trailing corner meets the anchor's
+   corner); large straddles it — its bottom sits 14 below the
+   anchor's top edge (so top: -2) and its leading edge sits 12
+   leading of the anchor's trailing edge. The anchor is the
+   wrapped element's box (as in Flutter's Badge), so on an icon
+   button the corner is the button's corner, not the glyph's.
+   Cap the label at four characters including "+" ("999+");
+   the badge just grows past that if you don't. */
+
+nmui-badge {
+  position: relative;
+  display: inline-flex;
+}
+
+nmui-badge > dot {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border-radius: var(--md-sys-shape-corner-full, 999px);
+  background-color: var(--md-sys-color-error, #ba1a1a);
+  color: var(--md-sys-color-on-error, #ffffff);
+  font: var(--md-sys-typescale-label-small, 500 11px/16px system-ui, sans-serif);
+  pointer-events: none;
+  z-index: 1;
+
+  /* Large badge (with a label). */
+  height: 16px;
+  min-width: 16px;
+  padding-inline: 4px;
+  top: -2px;
+  inset-inline-start: calc(100% - 12px);
+}
+
+/* Small badge (no label): a 6dp dot in the anchor's corner. */
+nmui-badge > dot:empty {
+  width: 6px;
+  height: 6px;
+  min-width: 0;
+  padding: 0;
+  top: 0;
+  inset-inline-start: auto;
+  inset-inline-end: 0;
+}

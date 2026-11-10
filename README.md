@@ -55,8 +55,10 @@ that turns flagged chunks into a plain-English incident summary.
   one codebase.
 - **SQLite** (via rusqlite, bundled) for the asset inventory and event log.
 - **Vanilla HTML/CSS/JS** frontend (`ui/`), with [nmui](https://nativemui.com)
-  as the official UI component library from Phase 2 (the live Purdue map
-  itself is hand-built SVG).
+  as the official UI component library — vendored and pinned at v0.40.0
+  under `ui/vendor/nmui/` (see its `VENDORED.md`), themed by the single
+  `deadband-industrial.css` theme file. nmui covers the shell and
+  standard controls; the live Purdue map itself is hand-built SVG.
 
 ## Building (Mac)
 

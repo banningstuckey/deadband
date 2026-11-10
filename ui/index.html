@@ -1,87 +1,78 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" theme="deadband-industrial">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Deadband</title>
-<style>
-  :root {
-    color-scheme: dark;
-    --bg: #101418;
-    --panel: #171d23;
-    --line: #2a343e;
-    --text: #dbe4ec;
-    --dim: #8fa1b3;
-    --accent: #7dd3fc;
-    --amber: #fbbf24;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    font-family: ui-sans-system, system-ui, -apple-system, "Segoe UI", sans-serif;
-    background: var(--bg);
-    color: var(--text);
-  }
-  header {
-    display: flex; align-items: baseline; gap: 14px;
-    padding: 18px 24px 12px;
-    border-bottom: 1px solid var(--line);
-  }
-  header h1 { font-size: 22px; margin: 0; letter-spacing: 0.04em; }
-  header .phase { color: var(--amber); font-size: 13px; text-transform: uppercase; letter-spacing: 0.12em; }
-  main { padding: 20px 24px; display: grid; gap: 16px; max-width: 880px; }
-  .card {
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    padding: 16px 18px;
-  }
-  .card h2 { margin: 0 0 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--dim); }
-  .card p { margin: 6px 0; line-height: 1.5; }
-  #engine-status { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; }
-  #engine-status .ok { color: var(--accent); }
-  #engine-status .err { color: #f87171; }
-  ol.levels { margin: 6px 0; padding-left: 22px; line-height: 1.9; }
-  ol.levels li span { color: var(--dim); }
-  .rule { color: var(--dim); font-size: 13px; }
-</style>
+<link rel="stylesheet" href="./vendor/nmui/css/tokens.css">
+<link rel="stylesheet" href="./vendor/nmui/css/typography.css">
+<link rel="stylesheet" href="./vendor/nmui/css/motion.css">
+<link rel="stylesheet" href="./vendor/nmui/css/base.css">
+<link rel="stylesheet" href="./vendor/nmui/css/themes/deadband-industrial.css">
+<link rel="stylesheet" href="./app.css">
+<script type="module">
+  import "./vendor/nmui/components/navigation/navigation.js";
+  import "./vendor/nmui/components/button/button.js";
+  import "./vendor/nmui/components/card/card.js";
+  import "./vendor/nmui/components/badge/badge.js";
+  import "./vendor/nmui/components/divider/divider.js";
+</script>
 </head>
 <body>
-  <header>
-    <h1>DEADBAND</h1>
-    <span class="phase">Phase 0 — skeleton</span>
-  </header>
-  <main>
-    <section class="card">
-      <h2>Engine status</h2>
-      <p id="engine-status">Contacting the Rust core…</p>
-      <p class="rule">This line is filled in by the <code>engine_status</code> Tauri command,
-      served by <code>deadband-core</code>. If it resolves, the Rust ↔ UI bridge works.</p>
-    </section>
+  <div class="shell">
+    <nmui-navigation rail expanded id="rail">
+      <header>
+        <headline small class="rail-brand">DEADBAND</headline>
+      </header>
+      <a href="#" selected>Live map</a>
+      <a href="#">Events</a>
+      <a href="#">Assets</a>
+      <a href="#">Rules</a>
+      <a href="#">Settings</a>
+    </nmui-navigation>
 
-    <section class="card">
-      <h2>Purdue levels (static placeholder)</h2>
-      <p>The live Purdue map arrives in Phase 2. For now, the levels it will draw:</p>
-      <ol class="levels" reversed>
-        <li>Level 5 <span>— Internet</span></li>
-        <li>Level 4 <span>— Enterprise IT</span></li>
-        <li>Level 3.5 <span>— IT/OT DMZ</span></li>
-        <li>Level 3 <span>— Operations</span></li>
-        <li>Level 2 <span>— Supervisory Control</span></li>
-        <li>Level 1 <span>— Basic Control (PLCs, RTUs)</span></li>
-        <li>Level 0 <span>— Physical Process</span></li>
-      </ol>
-    </section>
+    <main>
+      <div class="page-head">
+        <headline medium>Live map</headline>
+        <span class="phase-tag">Phase 0 — skeleton</span>
+      </div>
 
-    <section class="card">
-      <h2>Safety rules</h2>
-      <p>Passive only — Deadband reads copies of traffic and never transmits into a monitored network.
-      AI warns, never acts. Local first, no cloud. Lab-proven before it goes anywhere near a real plant.</p>
-    </section>
-  </main>
+      <nmui-card outlined>
+        <h2 class="card-title">Engine status</h2>
+        <p id="engine-status">Contacting the Rust core…</p>
+        <p class="dim">This line is filled in by the <code>engine_status</code> Tauri command,
+        served by <code>deadband-core</code>. If it resolves, the Rust ↔ UI bridge works.</p>
+        <div class="card-actions">
+          <nmui-button tonal id="recheck">Recheck</nmui-button>
+        </div>
+      </nmui-card>
+
+      <nmui-card outlined>
+        <h2 class="card-title">Purdue levels (static placeholder)</h2>
+        <p>The live Purdue map arrives in Phase 2. For now, the levels it will draw:</p>
+        <ol class="levels" reversed>
+          <li>Level 5 <span>— Internet</span></li>
+          <li>Level 4 <span>— Enterprise IT</span></li>
+          <li>Level 3.5 <span>— IT/OT DMZ</span></li>
+          <li>Level 3 <span>— Operations</span></li>
+          <li>Level 2 <span>— Supervisory Control</span></li>
+          <li>Level 1 <span>— Basic Control (PLCs, RTUs)</span></li>
+          <li>Level 0 <span>— Physical Process</span></li>
+        </ol>
+      </nmui-card>
+
+      <nmui-card outlined>
+        <h2 class="card-title">Safety rules</h2>
+        <p>Passive only — Deadband reads copies of traffic and never transmits into a monitored network.
+        AI warns, never acts. Local first, no cloud. Lab-proven before it goes anywhere near a real plant.</p>
+      </nmui-card>
+
+      <footer class="note">UI: nmui v0.40.0, vendored and pinned (ui/vendor/nmui) · Theme: Deadband Industrial, one theme file</footer>
+    </main>
+  </div>
 
 <script>
-  (async () => {
+  async function checkEngine() {
     const el = document.getElementById('engine-status');
     try {
       const invoke = window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke;
@@ -93,7 +84,18 @@
     } catch (err) {
       el.innerHTML = '<span class="err">●</span> Engine status unavailable: ' + err.message;
     }
-  })();
+  }
+  document.getElementById('recheck').addEventListener('click', checkEngine);
+  checkEngine();
+
+  // Placeholder destinations: move the selection, go nowhere yet.
+  document.querySelectorAll('#rail a').forEach((a) => {
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      document.querySelectorAll('#rail a').forEach((x) => x.removeAttribute('selected'));
+      a.setAttribute('selected', '');
+    });
+  });
 </script>
 </body>
 </html>

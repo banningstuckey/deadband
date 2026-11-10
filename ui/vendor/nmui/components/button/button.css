@@ -1,0 +1,1098 @@
+/* nmui-button — M3 Expressive button. Bare attributes declare variants;
+   every color resolves through --md-sys-* tokens (with M3 baseline
+   fallbacks), so the component works standalone and re-themes for free. */
+
+nmui-button {
+  display: inline-flex;
+  margin: 0;
+  flex: 0 1 auto;
+  min-width: 0;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  /* The round resting radius: half the height, per size. A real length
+     (not 999px) so the press morph interpolates the whole way instead
+     of sitting clamped until the last frames. */
+  --nmui-round: 20px;
+}
+
+nmui-button[xsmall] {
+  --nmui-round: 16px;
+}
+
+nmui-button[medium] {
+  --nmui-round: 28px;
+}
+
+nmui-button[large] {
+  --nmui-round: 48px;
+}
+
+nmui-button[xlarge] {
+  --nmui-round: 68px;
+}
+
+nmui-button > container {
+  border: 0;
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  transition:
+    border-radius var(--md-sys-motion-spring-fast-spatial, 250ms cubic-bezier(0.2, 0, 0, 1)),
+    box-shadow var(--md-sys-motion-spring-fast-effects, 200ms cubic-bezier(0.2, 0, 0, 1)),
+    background-color var(--md-sys-motion-spring-fast-effects, 200ms cubic-bezier(0.2, 0, 0, 1)),
+    color var(--md-sys-motion-spring-fast-effects, 200ms cubic-bezier(0.2, 0, 0, 1));
+}
+
+nmui-button:not([disabled]) {
+  cursor: pointer;
+}
+
+nmui-button[disabled] {
+  cursor: not-allowed;
+}
+
+/* The focus ring uses the container's own content color, not
+   primary: a primary ring vanishes into a filled button's
+   primary background. Content color always contrasts its own
+   background (it has to be readable), so the ring reads on
+   every variant, light and dark. It only shows for keyboard
+   focus — mouse clicks don't draw it, by design. */
+nmui-button:focus-visible > container {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+/* Ripple — the press feedback. JS appends a <ripple> to the
+   container on pointerdown (keyboard activation ripples from
+   the center); it expands from the press point and fades.
+   currentColor is the container's content color, so it reads
+   on every variant. The container's overflow clips it to the
+   (morphing) shape. */
+nmui-button > container > ripple {
+  position: absolute;
+  border-radius: 50%;
+  background-color: currentColor;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/*************
+ * Variants  *
+ *************/
+
+/* Filled (default) */
+nmui-button > container,
+nmui-button[filled] > container {
+  background-color: var(--md-sys-color-primary, #6750a4);
+  color: var(--md-sys-color-on-primary, #ffffff);
+  box-shadow: var(--md-sys-elevation-level0, none);
+}
+
+nmui-button:hover:not([disabled]) > container,
+nmui-button[filled]:hover:not([disabled]) > container {
+  background-color: color-mix(in srgb,
+    var(--md-sys-color-primary, #6750a4),
+    var(--md-sys-color-on-primary, #ffffff) 8%);
+  box-shadow: var(--md-sys-elevation-level1, 0 1px 2px rgb(0 0 0 / 0.3));
+}
+
+/* Elevated */
+nmui-button[elevated] > container {
+  background-color: var(--md-sys-color-surface-container-low, #f7f2fa);
+  color: var(--md-sys-color-primary, #6750a4);
+  box-shadow: var(--md-sys-elevation-level1, 0 1px 2px rgb(0 0 0 / 0.3));
+}
+
+nmui-button[elevated]:hover:not([disabled]) > container {
+  background-color: color-mix(in srgb,
+    var(--md-sys-color-primary, #6750a4) 8%,
+    var(--md-sys-color-surface-container-low, #f7f2fa));
+  box-shadow: var(--md-sys-elevation-level2, 0 1px 2px rgb(0 0 0 / 0.3), 0 2px 6px 2px rgb(0 0 0 / 0.15));
+}
+
+/* Tonal */
+nmui-button[tonal] > container {
+  background-color: var(--md-sys-color-secondary-container, #e8def8);
+  color: var(--md-sys-color-on-secondary-container, #4a4458);
+  box-shadow: var(--md-sys-elevation-level0, none);
+}
+
+nmui-button[tonal]:hover:not([disabled]) > container {
+  background-color: color-mix(in srgb,
+    var(--md-sys-color-on-secondary-container, #4a4458) 8%,
+    var(--md-sys-color-secondary-container, #e8def8));
+  box-shadow: var(--md-sys-elevation-level1, 0 1px 2px rgb(0 0 0 / 0.3));
+}
+
+/* Outlined — the ring is an inset box-shadow, not the outline
+   property: it draws inside the box, so every variant shares one
+   footprint and joined buttons (split, groups) line up exactly.
+   The outline property stays free for the focus ring. */
+nmui-button[outlined] > container {
+  background-color: transparent;
+  color: var(--md-sys-color-primary, #6750a4);
+  box-shadow: inset 0 0 0 1px var(--md-sys-color-outline-variant, #cac4d0);
+}
+
+nmui-button[outlined]:hover:not([disabled]) > container {
+  background-color: color-mix(in srgb,
+    var(--md-sys-color-primary, #6750a4) 8%, transparent);
+}
+
+/* Text */
+nmui-button[text] > container {
+  background-color: transparent;
+  color: var(--md-sys-color-primary, #6750a4);
+}
+
+nmui-button[text]:hover:not([disabled]) > container {
+  background-color: color-mix(in srgb,
+    var(--md-sys-color-primary, #6750a4) 8%, transparent);
+}
+
+/* Disabled — the fill/color pair lives after the toggle colors below,
+   where it can win. The outlined ring's fade sits with it too: as an
+   inset shadow it needs the specificity to beat the disabled reset. */
+
+/* Toggle selected / unselected */
+nmui-button[selected] > container {
+  background-color: var(--md-sys-color-primary, #6750a4);
+  color: var(--md-sys-color-on-primary, #ffffff);
+}
+
+nmui-button[selected]:hover:not([disabled]) > container {
+  background-color: color-mix(in srgb,
+    var(--md-sys-color-on-primary, #ffffff) 8%,
+    var(--md-sys-color-primary, #6750a4));
+}
+
+nmui-button[unselected] > container {
+  background-color: var(--md-sys-color-surface-container, #f3edf7);
+  color: var(--md-sys-color-on-surface-variant, #49454f);
+}
+
+nmui-button[unselected]:hover:not([disabled]) > container {
+  background-color: color-mix(in srgb,
+    var(--md-sys-color-on-surface-variant, #49454f) 8%,
+    var(--md-sys-color-surface-container, #f3edf7));
+}
+
+/**********
+ * Sizes  *  M3 Expressive: xs 32 · s 40 · m 56 · l 96 · xl 136
+ **********/
+
+/* xsmall */
+nmui-button[xsmall] > container {
+  height: 32px;
+  padding: 0 12px;
+  gap: 4px;
+  border-radius: var(--nmui-round);
+  font: var(--md-sys-typescale-label-large, 500 14px/20px system-ui, sans-serif);
+}
+
+nmui-button[xsmall] > container:active {
+  border-radius: var(--md-sys-shape-corner-small, 8px);
+}
+
+/* small (default) */
+nmui-button > container,
+nmui-button[small] > container {
+  height: 40px;
+  padding: 0 16px;
+  gap: 8px;
+  border-radius: var(--nmui-round);
+  font: var(--md-sys-typescale-label-large, 500 14px/20px system-ui, sans-serif);
+}
+
+nmui-button > container:active,
+nmui-button[small] > container:active {
+  border-radius: var(--md-sys-shape-corner-small, 8px);
+}
+
+/* medium */
+nmui-button[medium] > container {
+  height: 56px;
+  padding: 0 24px;
+  gap: 8px;
+  border-radius: var(--nmui-round);
+  font: var(--md-sys-typescale-title-medium, 500 16px/24px system-ui, sans-serif);
+}
+
+nmui-button[medium] > container:active {
+  border-radius: var(--md-sys-shape-corner-medium, 12px);
+}
+
+/* large */
+nmui-button[large] > container {
+  height: 96px;
+  padding: 0 48px;
+  gap: 12px;
+  border-radius: var(--nmui-round);
+  font: var(--md-sys-typescale-headline-small, 400 24px/32px system-ui, sans-serif);
+}
+
+nmui-button[large] > container:active {
+  border-radius: var(--md-sys-shape-corner-large, 16px);
+}
+
+/* xlarge */
+nmui-button[xlarge] > container {
+  height: 136px;
+  padding: 0 64px;
+  gap: 16px;
+  border-radius: var(--nmui-round);
+  font: var(--md-sys-typescale-headline-small, 400 24px/32px system-ui, sans-serif);
+}
+
+nmui-button[xlarge] > container:active {
+  border-radius: var(--md-sys-shape-corner-large, 16px);
+}
+
+/* Square family — per-size radii, morphing smaller on press */
+nmui-button[xsmall][square] > container,
+nmui-button[small][square] > container {
+  border-radius: var(--md-sys-shape-corner-medium, 12px);
+}
+
+nmui-button[xsmall][square] > container:active,
+nmui-button[small][square] > container:active {
+  border-radius: var(--md-sys-shape-corner-small, 8px);
+}
+
+nmui-button[medium][square] > container {
+  border-radius: var(--md-sys-shape-corner-large, 16px);
+}
+
+nmui-button[medium][square] > container:active {
+  border-radius: var(--md-sys-shape-corner-medium, 12px);
+}
+
+nmui-button[large][square] > container,
+nmui-button[xlarge][square] > container {
+  border-radius: var(--md-sys-shape-corner-extra-large, 28px);
+}
+
+nmui-button[large][square] > container:active,
+nmui-button[xlarge][square] > container:active {
+  border-radius: var(--md-sys-shape-corner-large, 16px);
+}
+
+/* …and the default size, declared with no size attribute at all */
+nmui-button[square] > container {
+  border-radius: var(--md-sys-shape-corner-medium, 12px);
+}
+
+nmui-button[square] > container:active {
+  border-radius: var(--md-sys-shape-corner-small, 8px);
+}
+
+/*********
+ * Icon  *
+ *********/
+
+nmui-button > container > icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Material Symbols Rounded";
+  font-style: normal;
+  font-variation-settings:
+    "FILL" 1,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 24;
+  /* Material Symbols render small next to text; size icons explicitly. */
+  font-size: 20px;
+  line-height: 1;
+  user-select: none;
+}
+
+/* [outline] on the icon flips the FILL axis off */
+nmui-button > container > icon[outline] {
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 24;
+}
+
+nmui-button[medium] > container > icon {
+  font-size: 24px;
+}
+
+nmui-button[large] > container > icon {
+  font-size: 32px;
+}
+
+nmui-button[xlarge] > container > icon {
+  font-size: 40px;
+}
+
+/* Icon-only buttons are square at their size's height */
+nmui-button[icon] > container {
+  padding: 0;
+  aspect-ratio: 1;
+}
+
+/***********************
+ * Group   *
+ ***********************/
+
+/* Standard group spacing follows the group size:
+   XS 18 · S 12 · M/L/XL 8 (spec padding table). */
+nmui-button[group]
+{
+  gap: 12px;
+}
+
+nmui-button[group][xsmall]
+{
+  gap: 18px;
+}
+
+nmui-button[group][medium],
+nmui-button[group][large],
+nmui-button[group][xlarge]
+{
+  gap: 8px;
+}
+
+nmui-button[group][connected]
+{
+  gap: 2px;
+}
+
+nmui-button[group][connected] > nmui-button > container
+{
+  border-radius: var(--md-sys-shape-corner-small, 8px);
+}
+
+nmui-button[group][connected] > :first-child > container
+{
+  border-start-start-radius: var(--nmui-round);
+  border-end-start-radius: var(--nmui-round);
+}
+
+nmui-button[group][connected] > :last-child > container
+{
+  border-start-end-radius: var(--nmui-round);
+  border-end-end-radius: var(--nmui-round);
+}
+
+/*******************
+ * Toggle colors   *  Per the M3 color table, each variant has its own
+ *******************  unselected/selected pair. Filled and elevated are
+ * already served by the generic [selected]/[unselected] rules above
+ * (filled unselected = surface container, selected = primary; elevated
+ * unselected = its resting style, selected = primary). */
+
+/* Tonal toggle: unselected keeps the tonal container; selected goes solid */
+nmui-button[toggle][tonal][unselected] > container {
+  background-color: var(--md-sys-color-secondary-container, #e8def8);
+  color: var(--md-sys-color-on-secondary-container, #4a4458);
+  box-shadow: var(--md-sys-elevation-level0, none);
+}
+
+nmui-button[toggle][tonal][selected] > container {
+  background-color: var(--md-sys-color-secondary, #625b71);
+  color: var(--md-sys-color-on-secondary, #ffffff);
+}
+
+nmui-button[toggle][tonal][selected]:hover:not([disabled]) > container {
+  background-color: color-mix(in srgb,
+    var(--md-sys-color-on-secondary, #ffffff) 8%,
+    var(--md-sys-color-secondary, #625b71));
+}
+
+/* Outlined toggle: selected fills with the inverse surface */
+nmui-button[toggle][outlined][unselected] > container {
+  background-color: transparent;
+  color: var(--md-sys-color-on-surface-variant, #49454f);
+}
+
+nmui-button[toggle][outlined][selected] > container {
+  background-color: var(--md-sys-color-inverse-surface, #322f35);
+  color: var(--md-sys-color-inverse-on-surface, #f5eff7);
+  box-shadow: none;
+}
+
+nmui-button[toggle][outlined][selected]:hover:not([disabled]) > container {
+  background-color: color-mix(in srgb,
+    var(--md-sys-color-inverse-on-surface, #f5eff7) 8%,
+    var(--md-sys-color-inverse-surface, #322f35));
+}
+
+/* Disabled, after every variant and toggle color so it wins: filled
+   containers collapse to on-surface 12% / 38%; text and standard carry
+   no container, so they only fade their content. */
+nmui-button[disabled]:not([text]):not([standard]) > container {
+  background-color: color-mix(in srgb,
+    var(--md-sys-color-on-surface, #1c1b1f) 12%, transparent);
+  color: color-mix(in srgb,
+    var(--md-sys-color-on-surface, #1c1b1f) 38%, transparent);
+  box-shadow: var(--md-sys-elevation-level0, none);
+}
+
+nmui-button[text][disabled] > container {
+  color: color-mix(in srgb,
+    var(--md-sys-color-on-surface, #1c1b1f) 38%, transparent);
+}
+
+nmui-button[outlined][disabled]:not([text]):not([standard]) > container {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb,
+    var(--md-sys-color-on-surface, #1c1b1f) 10%, transparent);
+}
+
+/******************
+ * Toggle shape   *  Selected rests square (round when [square]);
+ ******************  pressed keeps the shared pressed shape. */
+
+nmui-button[toggle][selected] > container,
+nmui-button[toggle][xsmall][selected] > container {
+  border-radius: var(--md-sys-shape-corner-medium, 12px);
+}
+
+nmui-button[toggle][medium][selected] > container {
+  border-radius: var(--md-sys-shape-corner-large, 16px);
+}
+
+nmui-button[toggle][large][selected] > container,
+nmui-button[toggle][xlarge][selected] > container {
+  border-radius: var(--md-sys-shape-corner-extra-large, 28px);
+}
+
+nmui-button[toggle][square][selected] > container {
+  border-radius: var(--nmui-round);
+}
+
+nmui-button[toggle][selected] > container:active,
+nmui-button[toggle][square][selected] > container:active {
+  border-radius: var(--md-sys-shape-corner-small, 8px);
+}
+
+nmui-button[toggle][medium][selected] > container:active {
+  border-radius: var(--md-sys-shape-corner-medium, 12px);
+}
+
+nmui-button[toggle][large][selected] > container:active,
+nmui-button[toggle][xlarge][selected] > container:active {
+  border-radius: var(--md-sys-shape-corner-large, 16px);
+}
+
+/***************************
+ * Icon button: standard   *  No container — the icon carries the color.
+ ***************************/
+
+nmui-button[icon] {
+  position: relative;
+  --target-pad: 0px;
+}
+
+nmui-button[icon][xsmall] {
+  --target-pad: 8px;
+}
+
+nmui-button[icon][small],
+nmui-button[icon]:not([xsmall]):not([small]):not([medium]):not([large]):not([xlarge]) {
+  --target-pad: 4px;
+}
+
+/* XS/S icon buttons keep a 48dp target under the smaller visual. */
+nmui-button[icon]::after {
+  content: "";
+  position: absolute;
+  inset: calc(-1 * var(--target-pad, 0px));
+}
+
+nmui-button[icon][standard] > container {
+  background-color: transparent;
+  color: var(--md-sys-color-on-surface-variant, #49454f);
+  box-shadow: var(--md-sys-elevation-level0, none);
+}
+
+nmui-button[icon][standard]:hover:not([disabled]) > container {
+  background-color: color-mix(in srgb,
+    var(--md-sys-color-on-surface-variant, #49454f) 8%, transparent);
+}
+
+nmui-button[icon][standard][unselected] > container {
+  background-color: transparent;
+  color: var(--md-sys-color-on-surface-variant, #49454f);
+}
+
+nmui-button[icon][standard][selected] > container {
+  background-color: transparent;
+  color: var(--md-sys-color-primary, #6750a4);
+}
+
+nmui-button[icon][standard][disabled] > container {
+  background-color: transparent;
+  color: color-mix(in srgb,
+    var(--md-sys-color-on-surface, #1c1b1f) 38%, transparent);
+}
+
+/************************************
+ * Connected groups: sized inners   *  Inner corner follows the host size:
+ ************************************  XS 4 · S/M 8 (base rules) · L 16 · XL 20.
+ * Square connected groups use the same scale for their outer corners. */
+
+nmui-button[group][connected][xsmall] > nmui-button > container
+{
+  border-radius: var(--md-sys-shape-corner-extra-small, 4px);
+}
+
+nmui-button[group][connected][large] > nmui-button > container
+{
+  border-radius: var(--md-sys-shape-corner-large, 16px);
+}
+
+nmui-button[group][connected][xlarge] > nmui-button > container
+{
+  border-radius: var(--md-sys-shape-corner-large-increased, 20px);
+}
+
+nmui-button[group][connected][xsmall] > :first-child > container,
+nmui-button[group][connected][large] > :first-child > container,
+nmui-button[group][connected][xlarge] > :first-child > container
+{
+  border-start-start-radius: var(--nmui-round);
+  border-end-start-radius: var(--nmui-round);
+}
+
+nmui-button[group][connected][xsmall] > :last-child > container,
+nmui-button[group][connected][large] > :last-child > container,
+nmui-button[group][connected][xlarge] > :last-child > container
+{
+  border-start-end-radius: var(--nmui-round);
+  border-end-end-radius: var(--nmui-round);
+}
+
+nmui-button[group][connected][square] > :first-child > container
+{
+  border-start-start-radius: var(--md-sys-shape-corner-small, 8px);
+  border-end-start-radius: var(--md-sys-shape-corner-small, 8px);
+}
+
+nmui-button[group][connected][square] > :last-child > container
+{
+  border-start-end-radius: var(--md-sys-shape-corner-small, 8px);
+  border-end-end-radius: var(--md-sys-shape-corner-small, 8px);
+}
+
+nmui-button[group][connected][xsmall][square] > :first-child > container
+{
+  border-start-start-radius: var(--md-sys-shape-corner-extra-small, 4px);
+  border-end-start-radius: var(--md-sys-shape-corner-extra-small, 4px);
+}
+
+nmui-button[group][connected][xsmall][square] > :last-child > container
+{
+  border-start-end-radius: var(--md-sys-shape-corner-extra-small, 4px);
+  border-end-end-radius: var(--md-sys-shape-corner-extra-small, 4px);
+}
+
+nmui-button[group][connected][large][square] > :first-child > container
+{
+  border-start-start-radius: var(--md-sys-shape-corner-large, 16px);
+  border-end-start-radius: var(--md-sys-shape-corner-large, 16px);
+}
+
+nmui-button[group][connected][large][square] > :last-child > container
+{
+  border-start-end-radius: var(--md-sys-shape-corner-large, 16px);
+  border-end-end-radius: var(--md-sys-shape-corner-large, 16px);
+}
+
+nmui-button[group][connected][xlarge][square] > :first-child > container
+{
+  border-start-start-radius: var(--md-sys-shape-corner-large-increased, 20px);
+  border-end-start-radius: var(--md-sys-shape-corner-large-increased, 20px);
+}
+
+nmui-button[group][connected][xlarge][square] > :last-child > container
+{
+  border-start-end-radius: var(--md-sys-shape-corner-large-increased, 20px);
+  border-end-end-radius: var(--md-sys-shape-corner-large-increased, 20px);
+}
+
+/***********
+ * Split   *  Two children joined; inner corners on the connected scale.
+ ***********/
+
+nmui-button[split] {
+  gap: 2px;
+}
+
+nmui-button[split] > nmui-button:first-child > container {
+  border-start-end-radius: var(--md-sys-shape-corner-small, 8px);
+  border-end-end-radius: var(--md-sys-shape-corner-small, 8px);
+}
+
+nmui-button[split] > nmui-button:last-child > container {
+  border-start-start-radius: var(--md-sys-shape-corner-small, 8px);
+  border-end-start-radius: var(--md-sys-shape-corner-small, 8px);
+}
+
+nmui-button[split][xsmall] > nmui-button:first-child > container {
+  border-start-end-radius: var(--md-sys-shape-corner-extra-small, 4px);
+  border-end-end-radius: var(--md-sys-shape-corner-extra-small, 4px);
+}
+
+nmui-button[split][xsmall] > nmui-button:last-child > container {
+  border-start-start-radius: var(--md-sys-shape-corner-extra-small, 4px);
+  border-end-start-radius: var(--md-sys-shape-corner-extra-small, 4px);
+}
+
+nmui-button[split][large] > nmui-button:first-child > container {
+  border-start-end-radius: var(--md-sys-shape-corner-large, 16px);
+  border-end-end-radius: var(--md-sys-shape-corner-large, 16px);
+}
+
+nmui-button[split][large] > nmui-button:last-child > container {
+  border-start-start-radius: var(--md-sys-shape-corner-large, 16px);
+  border-end-start-radius: var(--md-sys-shape-corner-large, 16px);
+}
+
+nmui-button[split][xlarge] > nmui-button:first-child > container {
+  border-start-end-radius: var(--md-sys-shape-corner-large-increased, 20px);
+  border-end-end-radius: var(--md-sys-shape-corner-large-increased, 20px);
+}
+
+nmui-button[split][xlarge] > nmui-button:last-child > container {
+  border-start-start-radius: var(--md-sys-shape-corner-large-increased, 20px);
+  border-end-start-radius: var(--md-sys-shape-corner-large-increased, 20px);
+}
+
+/* The menu arrow spins and morphs while the menu is open. */
+nmui-button[split] > nmui-button:last-child > container > icon {
+  transition: transform var(--md-sys-motion-spring-fast-spatial, 250ms cubic-bezier(0.2, 0, 0, 1));
+}
+
+nmui-button[split][open] > nmui-button:last-child > container > icon {
+  transform: rotate(180deg);
+}
+
+/*********
+ * FAB   *  Sizes: small 40 · default 56 · medium 80 · large 96.
+ *********/
+
+nmui-button[fab] > container {
+  height: 56px;
+  aspect-ratio: 1;
+  padding: 0;
+  gap: 0;
+  border-radius: var(--md-sys-shape-corner-large, 16px);
+  background-color: var(--md-sys-color-primary-container, #eaddff);
+  color: var(--md-sys-color-on-primary-container, #4f378b);
+  box-shadow: var(--md-sys-elevation-level3,
+    0 4px 8px 3px rgb(0 0 0 / 0.15), 0 1px 3px rgb(0 0 0 / 0.3));
+}
+
+nmui-button[fab]:hover:not([disabled]) > container {
+  background-color: color-mix(in srgb,
+    var(--md-sys-color-on-primary-container, #4f378b) 8%,
+    var(--md-sys-color-primary-container, #eaddff));
+  box-shadow: var(--md-sys-elevation-level4,
+    0 6px 10px 4px rgb(0 0 0 / 0.15), 0 2px 3px rgb(0 0 0 / 0.3));
+}
+
+nmui-button[fab] > container:active {
+  border-radius: var(--md-sys-shape-corner-medium, 12px);
+}
+
+nmui-button[fab] > container > icon {
+  font-size: 24px;
+}
+
+nmui-button[fab][small] > container {
+  height: 40px;
+  border-radius: var(--md-sys-shape-corner-medium, 12px);
+}
+
+nmui-button[fab][small] > container:active {
+  border-radius: var(--md-sys-shape-corner-small, 8px);
+}
+
+nmui-button[fab][small] > container > icon {
+  font-size: 20px;
+}
+
+nmui-button[fab][medium] > container {
+  height: 80px;
+  border-radius: 20px;
+}
+
+nmui-button[fab][medium] > container:active {
+  border-radius: var(--md-sys-shape-corner-large, 16px);
+}
+
+nmui-button[fab][medium] > container > icon {
+  font-size: 28px;
+}
+
+nmui-button[fab][large] > container {
+  height: 96px;
+  border-radius: var(--md-sys-shape-corner-extra-large, 28px);
+}
+
+nmui-button[fab][large] > container:active {
+  border-radius: 20px;
+}
+
+nmui-button[fab][large] > container > icon {
+  font-size: 36px;
+}
+
+nmui-button[fab][secondary] > container {
+  background-color: var(--md-sys-color-secondary-container, #e8def8);
+  color: var(--md-sys-color-on-secondary-container, #4a4458);
+}
+
+nmui-button[fab][secondary]:hover:not([disabled]) > container {
+  background-color: color-mix(in srgb,
+    var(--md-sys-color-on-secondary-container, #4a4458) 8%,
+    var(--md-sys-color-secondary-container, #e8def8));
+  box-shadow: var(--md-sys-elevation-level4,
+    0 6px 10px 4px rgb(0 0 0 / 0.15), 0 2px 3px rgb(0 0 0 / 0.3));
+}
+
+nmui-button[fab][tertiary] > container {
+  background-color: var(--md-sys-color-tertiary-container, #ffd8e4);
+  color: var(--md-sys-color-on-tertiary-container, #633b48);
+}
+
+nmui-button[fab][tertiary]:hover:not([disabled]) > container {
+  background-color: color-mix(in srgb,
+    var(--md-sys-color-on-tertiary-container, #633b48) 8%,
+    var(--md-sys-color-tertiary-container, #ffd8e4));
+  box-shadow: var(--md-sys-elevation-level4,
+    0 6px 10px 4px rgb(0 0 0 / 0.15), 0 2px 3px rgb(0 0 0 / 0.3));
+}
+
+nmui-button[fab][disabled] > container {
+  background-color: color-mix(in srgb,
+    var(--md-sys-color-on-surface, #1c1b1f) 12%, transparent);
+  color: color-mix(in srgb,
+    var(--md-sys-color-on-surface, #1c1b1f) 38%, transparent);
+  box-shadow: var(--md-sys-elevation-level0, none);
+}
+
+/* Extended FAB: icon + label. Sizes: small/default 56 · medium 80 · large 96. */
+nmui-button[fab][extended] > container {
+  aspect-ratio: auto;
+  height: 56px;
+  min-width: 80px;
+  padding: 0 20px;
+  gap: 8px;
+  border-radius: var(--md-sys-shape-corner-large, 16px);
+  font: var(--md-sys-typescale-title-medium, 500 16px/24px system-ui, sans-serif);
+}
+
+nmui-button[fab][extended] > container:active {
+  border-radius: var(--md-sys-shape-corner-medium, 12px);
+}
+
+nmui-button[fab][extended][medium] > container {
+  height: 80px;
+  padding: 0 28px;
+  gap: 12px;
+  border-radius: 20px;
+  font: var(--md-sys-typescale-title-large, 400 22px/28px system-ui, sans-serif);
+}
+
+nmui-button[fab][extended][medium] > container:active {
+  border-radius: var(--md-sys-shape-corner-large, 16px);
+}
+
+nmui-button[fab][extended][large] > container {
+  height: 96px;
+  padding: 0 32px;
+  gap: 12px;
+  border-radius: var(--md-sys-shape-corner-extra-large, 28px);
+  font: var(--md-sys-typescale-headline-small, 400 24px/32px system-ui, sans-serif);
+}
+
+nmui-button[fab][extended][large] > container:active {
+  border-radius: 20px;
+}
+
+/**************
+ * FAB menu   *  The FAB is the trigger; actions open above it, trailing
+ **************  aligned, measuring like medium buttons. The trigger keeps
+ * the set's container color; items take the set's solid color. */
+
+nmui-button[fab][menu] {
+  position: relative;
+}
+
+nmui-button[fab][menu] > menu {
+  position: absolute;
+  inset-inline-end: 0;
+  bottom: calc(100% + 4px);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(8px) scale(0.96);
+  transform-origin: bottom right;
+  pointer-events: none;
+  transition:
+    opacity var(--md-sys-motion-spring-fast-effects, 200ms cubic-bezier(0.2, 0, 0, 1)),
+    transform var(--md-sys-motion-spring-fast-spatial, 250ms cubic-bezier(0.2, 0, 0, 1)),
+    visibility 0s linear 250ms;
+}
+
+nmui-button[fab][menu][open] > menu {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  pointer-events: auto;
+  transition:
+    opacity var(--md-sys-motion-spring-fast-effects, 200ms cubic-bezier(0.2, 0, 0, 1)),
+    transform var(--md-sys-motion-spring-fast-spatial, 250ms cubic-bezier(0.2, 0, 0, 1)),
+    visibility 0s;
+}
+
+nmui-button[fab][menu] > container > icon {
+  transition: transform var(--md-sys-motion-spring-fast-spatial, 250ms cubic-bezier(0.2, 0, 0, 1));
+}
+
+nmui-button[fab][menu] > menu > nmui-button > container {
+  height: 56px;
+  background-color: var(--md-sys-color-primary, #6750a4);
+  color: var(--md-sys-color-on-primary, #ffffff);
+  box-shadow: var(--md-sys-elevation-level2,
+    0 1px 2px rgb(0 0 0 / 0.3), 0 2px 6px 2px rgb(0 0 0 / 0.15));
+}
+
+nmui-button[fab][menu] > menu > nmui-button:hover > container {
+  background-color: color-mix(in srgb,
+    var(--md-sys-color-on-primary, #ffffff) 8%,
+    var(--md-sys-color-primary, #6750a4));
+}
+
+nmui-button[fab][menu][secondary] > menu > nmui-button > container {
+  background-color: var(--md-sys-color-secondary, #625b71);
+  color: var(--md-sys-color-on-secondary, #ffffff);
+}
+
+nmui-button[fab][menu][secondary] > menu > nmui-button:hover > container {
+  background-color: color-mix(in srgb,
+    var(--md-sys-color-on-secondary, #ffffff) 8%,
+    var(--md-sys-color-secondary, #625b71));
+}
+
+nmui-button[fab][menu][tertiary] > menu > nmui-button > container {
+  background-color: var(--md-sys-color-tertiary, #7d5260);
+  color: var(--md-sys-color-on-tertiary, #ffffff);
+}
+
+nmui-button[fab][menu][tertiary] > menu > nmui-button:hover > container {
+  background-color: color-mix(in srgb,
+    var(--md-sys-color-on-tertiary, #ffffff) 8%,
+    var(--md-sys-color-tertiary, #7d5260));
+}
+
+nmui-button[fab][menu] > menu > button {
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 56px;
+  padding: 0 24px;
+  border-radius: var(--md-sys-shape-corner-extra-large, 28px);
+  font: var(--md-sys-typescale-title-medium, 500 16px/24px system-ui, sans-serif);
+  background-color: var(--md-sys-color-primary, #6750a4);
+  color: var(--md-sys-color-on-primary, #ffffff);
+  box-shadow: var(--md-sys-elevation-level2,
+    0 1px 2px rgb(0 0 0 / 0.3), 0 2px 6px 2px rgb(0 0 0 / 0.15));
+}
+
+/************************************
+ * Toggle icon: the glyph follows   *  Unselected draws the outlined
+ ************************************  glyph; selected fills it. */
+
+nmui-button[icon][toggle][unselected] > container > icon {
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 24;
+}
+
+nmui-button[icon][toggle][selected] > container > icon {
+  font-variation-settings:
+    "FILL" 1,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 24;
+}
+
+/* Split, open: the menu button leaves the split shape and becomes a
+   circle (its icon rotates up via the rule above). */
+nmui-button[split][open] > nmui-button:last-child > container {
+  border-radius: var(--nmui-round);
+}
+
+/***********************************
+ * Standard group interaction      *  Buttons share the group's width;
+ ***********************************  the selected one takes more room,
+ * and pressing one briefly widens it while its neighbours give way. */
+
+nmui-button[group]:not([connected]) > nmui-button {
+  flex: 1 1 0%;
+  min-width: 0;
+  transition: flex-grow var(--md-sys-motion-spring-default-spatial, 500ms cubic-bezier(0.2, 0, 0, 1));
+}
+
+nmui-button[group]:not([connected]) > nmui-button[icon] {
+  flex: 0 0 auto;
+}
+
+nmui-button[group]:not([connected]) > nmui-button[selected] {
+  flex-grow: 1.75;
+}
+
+nmui-button[group]:not([connected]) > nmui-button:active {
+  flex-grow: 1.5;
+}
+
+/* The space comes from the ADJACENT buttons (spec: "adjacent buttons
+   move and temporarily change width"), so the changing button grows
+   from its own center while distant buttons stay put. Buttons that
+   are themselves selected or pressed are never the ones giving way. */
+nmui-button[group]:not([connected]) > nmui-button:not([selected]):not(:active):not([icon]):has(+ nmui-button[selected]),
+nmui-button[group]:not([connected]) > nmui-button[selected] + nmui-button:not([selected]):not(:active):not([icon]),
+nmui-button[group]:not([connected]) > nmui-button:not([selected]):not(:active):not([icon]):has(+ nmui-button:active),
+nmui-button[group]:not([connected]) > nmui-button:active + nmui-button:not([selected]):not(:active):not([icon]) {
+  flex-grow: 0.85;
+}
+
+/* FAB: height animates too (the fab menu's close button shrinks). */
+nmui-button[fab] > container {
+  transition:
+    border-radius var(--md-sys-motion-spring-fast-spatial, 250ms cubic-bezier(0.2, 0, 0, 1)),
+    box-shadow var(--md-sys-motion-spring-fast-effects, 200ms cubic-bezier(0.2, 0, 0, 1)),
+    background-color var(--md-sys-motion-spring-fast-effects, 200ms cubic-bezier(0.2, 0, 0, 1)),
+    color var(--md-sys-motion-spring-fast-effects, 200ms cubic-bezier(0.2, 0, 0, 1)),
+    height var(--md-sys-motion-spring-fast-spatial, 250ms cubic-bezier(0.2, 0, 0, 1));
+}
+
+/* FAB menu, open: the trigger becomes the circular close button —
+   always 56 (medium/large triggers shrink to meet it). */
+nmui-button[fab][menu][open] > container {
+  border-radius: 28px;
+}
+
+nmui-button[fab][menu][open][small] > container {
+  border-radius: 20px;
+}
+
+nmui-button[fab][menu][open][medium] > container,
+nmui-button[fab][menu][open][large] > container {
+  height: 56px;
+}
+
+/* Split joins: elevated halves cast ONE shadow, from the host, so
+   the gap doesn't double it. (Outlined joins like every other
+   variant now that its ring is an inset shadow.) */
+nmui-button[split][elevated] {
+  filter:
+    drop-shadow(0 1px 2px rgb(0 0 0 / 0.3))
+    drop-shadow(0 1px 3px rgb(0 0 0 / 0.15));
+}
+
+nmui-button[split][elevated]:hover {
+  filter:
+    drop-shadow(0 1px 2px rgb(0 0 0 / 0.3))
+    drop-shadow(0 2px 6px rgb(0 0 0 / 0.15));
+}
+
+nmui-button[split][elevated] > nmui-button > container,
+nmui-button[split][elevated]:hover > nmui-button > container {
+  box-shadow: none;
+}
+
+/************************************
+ * Group selection shape            *  Standard group: the selected
+ ************************************  button rests as a rounded square
+ * (round, if the group is [square]). Connected group: the selected
+ * button becomes fully round. */
+
+nmui-button[group]:not([connected]) > nmui-button[selected] > container {
+  border-radius: var(--md-sys-shape-corner-medium, 12px);
+}
+
+nmui-button[group]:not([connected]) > nmui-button[medium][selected] > container {
+  border-radius: var(--md-sys-shape-corner-large, 16px);
+}
+
+nmui-button[group]:not([connected]) > nmui-button[large][selected] > container,
+nmui-button[group]:not([connected]) > nmui-button[xlarge][selected] > container {
+  border-radius: var(--md-sys-shape-corner-extra-large, 28px);
+}
+
+nmui-button[group]:not([connected]) > nmui-button[selected] > container:active {
+  border-radius: var(--md-sys-shape-corner-small, 8px);
+}
+
+nmui-button[group]:not([connected]) > nmui-button[medium][selected] > container:active {
+  border-radius: var(--md-sys-shape-corner-medium, 12px);
+}
+
+nmui-button[group]:not([connected]) > nmui-button[large][selected] > container:active,
+nmui-button[group]:not([connected]) > nmui-button[xlarge][selected] > container:active {
+  border-radius: var(--md-sys-shape-corner-large, 16px);
+}
+
+nmui-button[group]:not([connected]) > nmui-button[square][selected] > container {
+  border-radius: var(--nmui-round);
+}
+
+nmui-button[group][connected] > nmui-button[selected] > container {
+  border-radius: var(--nmui-round);
+}
+
+nmui-button[group][connected][square] > nmui-button[selected] > container {
+  border-radius: var(--nmui-round);
+}
+
+nmui-button[group][connected][xsmall][square] > nmui-button[selected] > container,
+nmui-button[group][connected][large][square] > nmui-button[selected] > container,
+nmui-button[group][connected][xlarge][square] > nmui-button[selected] > container {
+  border-radius: var(--nmui-round);
+}
+
+/************************************
+ * Toggle icon swap                 *  Author two icons and mark the
+ ************************************  selected-state one [selected] —
+ * it replaces the default icon while the button is selected:
+ *   <nmui-button toggle icon>
+ *     <icon>mic</icon><icon selected>mic_off</icon>
+ *   </nmui-button> */
+
+nmui-button[toggle] > container > icon[selected] {
+  display: none;
+}
+
+nmui-button[toggle][selected] > container > icon[selected] {
+  display: inline-flex;
+}
+
+nmui-button[toggle][selected] > container:has(> icon[selected]) > icon:not([selected]) {
+  display: none;
+}

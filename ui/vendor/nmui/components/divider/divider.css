@@ -1,0 +1,44 @@
+/* nmui-divider — M3 divider.
+ *
+ * A 1dp rule in outline-variant. Variants, per the specs:
+ *   (bare)          full width (100%)
+ *   [inset]         16dp in from the leading edge only
+ *                   (specs: left margin 16dp, right margin 0dp)
+ *   [middle-inset]  16dp in from both edges
+ *   [vertical]      the same, rotated: a 1dp-wide rule that
+ *                   stretches to its row's height; [inset] insets
+ *                   the top end, [middle-inset] both ends.
+ * The 8px block margin is the spacing the specs print around a
+ * divider; containers that want their own (a menu does) override
+ * it. In RTL, [inset] follows the leading edge automatically —
+ * margin-inline-start, not a physical left. */
+
+nmui-divider {
+  display: block;
+  height: 1px;
+  background-color: var(--md-sys-color-outline-variant, #cac4d0);
+  margin: 8px 0;
+}
+
+nmui-divider[inset] {
+  margin-inline-start: 16px;
+}
+
+nmui-divider[middle-inset] {
+  margin-inline: 16px;
+}
+
+nmui-divider[vertical] {
+  width: 1px;
+  height: auto;
+  align-self: stretch;
+  margin: 0 8px;
+}
+
+nmui-divider[vertical][inset] {
+  margin-block-start: 16px;
+}
+
+nmui-divider[vertical][middle-inset] {
+  margin-block: 16px;
+}

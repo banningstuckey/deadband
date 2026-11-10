@@ -1,0 +1,60 @@
+/* Deadband app layout. Colors and shape come from the nmui tokens and
+   the Deadband Industrial theme (vendor/nmui/css/) — this file only
+   places things. */
+
+:root { color-scheme: dark; }
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.shell { display: flex; min-height: 100vh; align-items: stretch; }
+
+main {
+  flex: 1;
+  min-width: 0;
+  padding: 24px 28px 32px;
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  max-width: 920px;
+}
+
+.page-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+
+.phase-tag {
+  color: var(--md-sys-color-tertiary);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.card-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+main p { margin: 6px 0; line-height: 1.5; }
+
+#engine-status { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; }
+#engine-status .ok { color: var(--md-sys-color-primary); }
+#engine-status .err { color: var(--md-sys-color-error); }
+
+.dim { color: var(--md-sys-color-on-surface-variant); font-size: 13px; }
+
+ol.levels { margin: 6px 0; padding-left: 22px; line-height: 1.9; }
+ol.levels li span { color: var(--md-sys-color-on-surface-variant); }
+
+.card-actions { margin-top: 12px; }
+
+.rail-brand { padding: 4px 8px; letter-spacing: 0.06em; }
+
+footer.note { color: var(--md-sys-color-on-surface-variant); font-size: 12px; }
