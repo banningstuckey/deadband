@@ -44,7 +44,7 @@
     <img id="splash-logo" src="./assets/deadband-logo.jpg" alt="Deadband"
          onerror="var s=document.getElementById('splash'); if(s) s.remove();">
     <p class="splash-sub">Real-time passive OT network monitor</p>
-    <p class="splash-version" id="splash-version">Deadband v0.1.4</p>
+    <p class="splash-version" id="splash-version">Deadband v0.1.5</p>
   </div>
   <div class="shell">
     <nmui-navigation rail expanded id="rail">
@@ -460,7 +460,7 @@
         </nmui-card>
       </section>
 
-      <footer class="note">Deadband v0.1.4 · UI: nmui v0.43.7, vendored and pinned (ui/vendor/nmui) · Themes selectable in Settings</footer>
+      <footer class="note">Deadband v0.1.5 · UI: nmui v0.43.7, vendored and pinned (ui/vendor/nmui) · Themes selectable in Settings</footer>
     </main>
   </div>
 
@@ -656,6 +656,7 @@
   const queryAiStatus = document.getElementById('query-ai-status');
   const queryAiAsk = document.getElementById('query-ai-ask');
   const queryAiToggle = document.getElementById('query-ai-toggle');
+  const queryInputWrap = document.querySelector('.query-input-wrap');
 
   async function loadBacklog() {
     if (!invoke) return;
@@ -820,11 +821,18 @@
   }
 
   // ---- plain-English query (local AI) -------------------------------
-  if (queryAiToggle) queryAiToggle.addEventListener('click', () => {
-    const open = queryAiRow.hidden;
-    queryAiRow.hidden = !open;
-    queryAiToggle.toggleAttribute('selected', open);
+  // Opening the AI row hides the query bar's input + Search — two
+  // search boxes at once is one too many. The ✦ AI toggle stays put
+  // (it is the way back); closing restores the bar.
+  function setAiOpen(open) {
+    if (queryAiRow) queryAiRow.hidden = !open;
+    if (queryAiToggle) queryAiToggle.toggleAttribute('selected', open);
+    if (queryInputWrap) queryInputWrap.hidden = open;
+    if (queryRunBtn) queryRunBtn.hidden = open;
     if (open && queryAiInput) queryAiInput.focus();
+  }
+  if (queryAiToggle) queryAiToggle.addEventListener('click', () => {
+    setAiOpen(queryAiRow.hidden);
   });
   async function askAi() {
     if (!queryAiInput) return;
@@ -836,8 +844,7 @@
       const res = await invoke('translate_query', { text, model: analystModel || null });
       if (queryInputEl) queryInputEl.value = res.query;
       if (queryAiStatus) queryAiStatus.textContent = '';
-      if (queryAiRow) queryAiRow.hidden = true;
-      if (queryAiToggle) queryAiToggle.removeAttribute('selected');
+      setAiOpen(false);
       await runQuery(res.query);
     } catch (err) {
       if (queryAiStatus) queryAiStatus.textContent = String(err);
