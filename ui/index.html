@@ -59,11 +59,21 @@
             <div class="stat"><span class="stat-label">Devices known</span><b id="ov-devices">—</b></div>
             <div class="stat"><span class="stat-label">Alerts raised</span><b id="ov-alerts">—</b></div>
           </div>
+          <div class="gauge-wrap">
+            <div class="gauge-head"><span class="stat-label">Deadband gauge — risk vs the learned normal band</span><span id="gauge-note" class="dim"></span></div>
+            <div class="gauge-track"><div class="gauge-zone gauge-band"></div><div class="gauge-zone gauge-warn"></div><div class="gauge-zone gauge-danger"></div><div class="gauge-needle" id="gauge-needle"></div></div>
+            <div class="gauge-scale"><span>0 — inside the band = normal</span><span>50 — warning edge</span><span>100</span></div>
+          </div>
           <p class="dim" id="ov-latest">The 10-second version: state, risk, and the latest alert — the raw detail lives in Events when you want it.</p>
         </nmui-card>
 
         <nmui-card outlined class="map-card">
           <h2 class="card-title">Purdue map — live</h2>
+          <div class="filter-row">
+            <button class="chip-btn" id="map-mode-full" selected>Full map</button>
+            <button class="chip-btn" id="map-mode-changes">Changes only</button>
+            <button class="chip-btn" id="map-baseline-reset">Reset baseline</button>
+          </div>
           <div class="map-scroll">
             <svg id="purdue-map" viewBox="0 0 1040 872" role="img"
                  aria-label="Live Purdue Model map of the monitored network"></svg>
@@ -104,6 +114,24 @@
           <h2 class="card-title">Safety rules</h2>
           <p>Passive only — Deadband reads copies of traffic and never transmits into a monitored network.
           AI warns, never acts. Local first, no cloud. Lab-proven before it goes anywhere near a real plant.</p>
+        </nmui-card>
+
+        <nmui-card outlined class="span-all">
+          <h2 class="card-title">Latest incident — storyboard</h2>
+          <div id="story-body"><p class="dim">No alerts yet. When something fires, the incident
+          is assembled here as a strip of frames — what happened, in order — instead of
+          log rows you have to piece together yourself.</p></div>
+        </nmui-card>
+
+        <nmui-card outlined class="span-all">
+          <h2 class="card-title">Trajectory — who is climbing?</h2>
+          <div id="traj-body"><p class="dim">No device is climbing toward the controllers right now.</p></div>
+        </nmui-card>
+
+        <nmui-card outlined class="span-all">
+          <h2 class="card-title">Heartbeats — device rhythm</h2>
+          <div id="heart-body"><p class="dim">Each device's traffic rhythm as a waveform.
+          Steady = healthy polling. Bunched, frantic, or flat = look closer.</p></div>
         </nmui-card>
       </section>
 
@@ -436,6 +464,159 @@
   loadOverview();
   setInterval(loadOverview, 5000);
 
+  // ---- the visualization layer: gauge, storyboard, trajectory, heartbeats --
+  const pairKeyJs = (a, b) => [a, b].sort().join('|');
+  function renderStoryboard(recent) {
+    const body = document.getElementById('story-body');
+    const alert = recent.find((e) => e.kind === 'alert');
+    if (!alert) return;
+    const subject = alert.src_ip || alert.dst_ip;
+    const frames = recent
+      .filter((e) => (e.src_ip === subject || e.dst_ip === subject) &&
+        e.timestamp >= alert.timestamp - 90 && e.timestamp <= alert.timestamp + 5)
+      .sort((a, b) => a.timestamp - b.timestamp)
+      .slice(-8);
+    if (!frames.length) return;
+    body.innerHTML = '';
+    const strip = document.createElement('div');
+    strip.className = 'story-strip';
+    frames.forEach((f, i) => {
+      if (i > 0) {
+        const arrow = document.createElement('span');
+        arrow.className = 'frame-arrow';
+        arrow.textContent = '→';
+        strip.appendChild(arrow);
+      }
+      const card = document.createElement('div');
+      card.className = 'frame' + (f.kind === 'alert' ? ' frame-alert' : f.kind === 'write' ? ' frame-write' : '');
+      const t = document.createElement('span');
+      t.className = 'frame-time';
+      t.textContent = fmtTime(f.timestamp);
+      const s = document.createElement('span');
+      s.textContent = f.summary;
+      card.append(t, s);
+      strip.appendChild(card);
+    });
+    body.appendChild(strip);
+  }
+
+  function renderTraj(recent, snap) {
+    const body = document.getElementById('traj-body');
+    const levelOf = new Map();
+    snap.devices.forEach((d) => {
+      if (d.level_label) levelOf.set(d.ip, parseFloat(d.level_label));
+    });
+    const labelOf = new Map(snap.devices.map((d) => [d.ip, d.label || d.ip]));
+    const bySrc = new Map();
+    [...recent].sort((a, b) => a.timestamp - b.timestamp).forEach((e) => {
+      if (!e.src_ip || !e.dst_ip || !levelOf.has(e.dst_ip)) return;
+      if (!bySrc.has(e.src_ip)) bySrc.set(e.src_ip, []);
+      bySrc.get(e.src_ip).push({ t: e.timestamp, lvl: levelOf.get(e.dst_ip) });
+    });
+    const climbers = [];
+    bySrc.forEach((hits, ip) => {
+      const path = [];
+      hits.forEach((h) => { if (!path.length || path[path.length - 1].lvl !== h.lvl) path.push(h); });
+      const lvls = path.map((p) => p.lvl);
+      const minL = Math.min(...lvls), maxL = Math.max(...lvls);
+      // Climbing = reaching progressively LOWER level numbers over time.
+      let descending = false, tHigh = null, tLow = null;
+      path.forEach((p) => {
+        if (p.lvl === maxL && tHigh === null) tHigh = p.t;
+        if (p.lvl === minL) tLow = p.t;
+      });
+      descending = maxL > minL && tHigh !== null && tLow !== null && tLow > tHigh;
+      if (descending && minL <= 2) climbers.push({ ip, path, minL, maxL, tHigh, tLow });
+    });
+    if (!climbers.length) {
+      body.innerHTML = '<p class="dim">No device is climbing toward the controllers right now.</p>';
+      return;
+    }
+    body.innerHTML = '';
+    climbers.forEach((c) => {
+      const minutes = Math.max((c.tLow - c.tHigh) / 60, 0.1);
+      const crossed = c.maxL - c.minL;
+      const minsToL1 = c.minL > 1 ? ((c.minL - 1) / (crossed / minutes)).toFixed(0) : '0';
+      const p = document.createElement('p');
+      p.innerHTML = '';
+      const strong = document.createElement('strong');
+      strong.textContent = labelOf.get(c.ip) || c.ip;
+      const rest = document.createElement('span');
+      rest.textContent = ' is moving down the levels: ' +
+        c.path.map((x) => 'L' + x.lvl).join(' → ') +
+        ' — crossed ' + crossed + ' level(s) in ~' + minutes.toFixed(1) + ' min.' +
+        (c.minL > 1 ? ' At that pace it reaches Level 1 in roughly ' + minsToL1 + ' min.' : ' It has already reached the control levels.');
+      p.append(strong, rest);
+      body.appendChild(p);
+    });
+  }
+
+  function renderHearts(recent, snap) {
+    const body = document.getElementById('heart-body');
+    if (!recent.length || !snap.devices.length) return;
+    const tMax = Math.max(...recent.map((e) => e.timestamp));
+    const BINS = 24, span = Math.max(tMax - Math.min(...recent.map((e) => e.timestamp)), 1);
+    body.innerHTML = '';
+    snap.devices.forEach((d) => {
+      const bins = new Array(BINS).fill(0);
+      let wrote = false;
+      recent.forEach((e) => {
+        if (e.src_ip === d.ip || e.dst_ip === d.ip) {
+          const idx = Math.min(BINS - 1, Math.floor((e.timestamp - (tMax - span)) / span * BINS));
+          if (idx >= 0) bins[idx] += 1;
+          if (e.kind === 'write' && e.src_ip === d.ip) wrote = true;
+        }
+      });
+      const max = Math.max(...bins, 1);
+      const pts = bins.map((v, i) =>
+        (i / (BINS - 1) * 220).toFixed(1) + ',' + (26 - v / max * 22).toFixed(1)).join(' ');
+      const row = document.createElement('div');
+      row.className = 'heart-row';
+      const name = document.createElement('span');
+      name.className = 'heart-name';
+      name.textContent = (d.label || d.ip) + (wrote ? ' · wrote' : '');
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', '0 0 220 30');
+      svg.setAttribute('class', 'heart-svg' + (wrote ? ' heart-wrote' : ''));
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+      line.setAttribute('points', pts);
+      svg.appendChild(line);
+      row.append(name, svg);
+      body.appendChild(row);
+    });
+  }
+
+  async function loadViz() {
+    if (!invoke) return;
+    try {
+      const [recent, snap, anomaly] = await Promise.all([
+        invoke('recent_events', { limit: 500 }),
+        invoke('network_snapshot'),
+        invoke('anomaly_status'),
+      ]);
+      const needle = document.getElementById('gauge-needle');
+      if (needle) needle.style.left = 'calc(' + anomaly.risk_score + '% - 1px)';
+      const note = document.getElementById('gauge-note');
+      if (note) note.textContent = anomaly.learning ? 'still learning the band'
+        : anomaly.risk_score < 50 ? 'needle inside the band' : 'needle OUT of the band';
+      const actors = new Set(), pairs = new Set();
+      recent.forEach((e) => {
+        if (e.kind === 'alert' || e.kind === 'write') {
+          if (e.src_ip) actors.add(e.src_ip);
+          if (e.dst_ip) actors.add(e.dst_ip);
+          if (e.src_ip && e.dst_ip) pairs.add(pairKeyJs(e.src_ip, e.dst_ip));
+        }
+      });
+      window._vizActors = actors;
+      window._vizPairs = pairs;
+      renderStoryboard(recent);
+      renderTraj(recent, snap);
+      renderHearts(recent, snap);
+    } catch (err) { /* viz layer is best-effort */ }
+  }
+  loadViz();
+  setInterval(loadViz, 5000);
+
   // ---- rules + scenarios --------------------------------------------------
   const anomalyStatusEl = document.getElementById('anomaly-status');
   const anomalyFactorsEl = document.getElementById('anomaly-factors');
@@ -588,6 +769,8 @@
   const UNCLASS_Y = bandY(7) + 8;
   const svg = document.getElementById('purdue-map');
   let snapshot = { devices: [], connections: [] };
+  let changesMode = false;
+  let baselineSet = null;
   let positions = new Map();
   let lastSig = '';
 
@@ -604,6 +787,9 @@
     if (!invoke) return;
     try {
       const s = await invoke('network_snapshot');
+      if (baselineSet === null && s.devices.length) {
+        baselineSet = new Set(s.devices.map((d) => d.ip));
+      }
       if (snapshotSig(s) !== lastSig) {
         lastSig = snapshotSig(s);
         snapshot = s;
@@ -675,7 +861,15 @@
       const a = positions.get(c.src_ip), b = positions.get(c.dst_ip);
       if (!a || !b) return;
       const width = Math.min(2 + c.packet_count / 300, 5).toFixed(1);
-      out += '<line class="conduit" data-pair="' + esc(pairKey(c.src_ip, c.dst_ip)) +
+      let conduitCls = 'conduit';
+      if (changesMode) {
+        const actors = window._vizActors || new Set();
+        const cpairs = window._vizPairs || new Set();
+        const changedC = (baselineSet && (!baselineSet.has(c.src_ip) || !baselineSet.has(c.dst_ip))) ||
+          actors.has(c.src_ip) || actors.has(c.dst_ip) || cpairs.has(pairKey(c.src_ip, c.dst_ip));
+        conduitCls += changedC ? ' conduit-changed' : ' conduit-old';
+      }
+      out += '<line class="' + conduitCls + '" data-pair="' + esc(pairKey(c.src_ip, c.dst_ip)) +
         '" data-a="' + esc(c.src_ip) + '" data-b="' + esc(c.dst_ip) +
         '" x1="' + (a.x + a.w / 2) + '" y1="' + (a.y + NODE_H / 2) +
         '" x2="' + (b.x + b.w / 2) + '" y2="' + (b.y + NODE_H / 2) +
@@ -690,7 +884,13 @@
       const compact = pos.w < 150;
       const labelChars = Math.max(6, Math.floor((pos.w - 22) / 7.3));
       const subChars = Math.max(8, Math.floor((pos.w - 22) / 5.9));
-      out += '<g class="node' + (compact ? ' compact' : '') + '" data-ip="' + esc(ip) +
+      let diffCls = '';
+      if (changesMode) {
+        const actors = window._vizActors || new Set();
+        const isNew = (baselineSet && !baselineSet.has(ip)) || actors.has(ip);
+        diffCls = isNew ? ' node-new' : ' node-old';
+      }
+      out += '<g class="node' + (compact ? ' compact' : '') + diffCls + '" data-ip="' + esc(ip) +
         '" transform="translate(' + pos.x + ' ' + pos.y + ')">' +
         '<rect width="' + pos.w + '" height="' + NODE_H + '" rx="8"></rect>' +
         '<text class="n-label" x="12" y="21">' + esc(fit(d.label || ip, labelChars)) + '</text>' +
@@ -822,6 +1022,22 @@
       }
     });
   }
+
+  const modeFull = document.getElementById('map-mode-full');
+  const modeChanges = document.getElementById('map-mode-changes');
+  function setMapMode(changes) {
+    changesMode = changes;
+    if (modeFull) modeFull.toggleAttribute('selected', !changes);
+    if (modeChanges) modeChanges.toggleAttribute('selected', changes);
+    renderMap();
+  }
+  if (modeFull) modeFull.addEventListener('click', () => setMapMode(false));
+  if (modeChanges) modeChanges.addEventListener('click', () => setMapMode(true));
+  const baseReset = document.getElementById('map-baseline-reset');
+  if (baseReset) baseReset.addEventListener('click', () => {
+    baselineSet = new Set(snapshot.devices.map((d) => d.ip));
+    renderMap();
+  });
 
   (async () => {
     renderMap();

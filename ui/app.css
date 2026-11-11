@@ -289,3 +289,30 @@ select.text-input { max-width: 240px; }
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12.5px;
 }
+
+/* Visualization layer: gauge, diff mode, storyboard, trajectory, heartbeats */
+.gauge-wrap { margin-top: 14px; }
+.gauge-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.gauge-track { position: relative; display: flex; height: 18px; border-radius: 9px; overflow: visible; margin-top: 6px; }
+.gauge-zone { height: 100%; }
+.gauge-band { width: 50%; background: color-mix(in srgb, var(--md-sys-color-primary) 45%, transparent); border-radius: 9px 0 0 9px; }
+.gauge-warn { width: 30%; background: color-mix(in srgb, var(--md-sys-color-tertiary) 55%, transparent); }
+.gauge-danger { width: 20%; background: color-mix(in srgb, var(--md-sys-color-error) 60%, transparent); border-radius: 0 9px 9px 0; }
+.gauge-needle { position: absolute; top: -5px; width: 3px; height: 28px; background: var(--md-sys-color-on-surface); border-radius: 2px; transition: left 0.6s ease; }
+.gauge-scale { display: flex; justify-content: space-between; font-size: 11px; color: var(--md-sys-color-on-surface-variant); margin-top: 4px; }
+.span-all { grid-column: 1 / -1; }
+#purdue-map .node-old { opacity: 0.22; }
+#purdue-map .node-new rect { stroke: var(--md-sys-color-tertiary); stroke-width: 2.5; stroke-dasharray: 7 4; }
+#purdue-map .conduit-old { opacity: 0.1; }
+#purdue-map .conduit-changed { stroke: var(--md-sys-color-tertiary); }
+.story-strip { display: flex; align-items: stretch; gap: 6px; overflow-x: auto; padding: 4px 0; }
+.frame { min-width: 190px; max-width: 240px; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 10px; padding: 8px 10px; display: grid; gap: 4px; font-size: 12.5px; background: var(--md-sys-color-surface-container); }
+.frame-alert { border-color: var(--md-sys-color-error); }
+.frame-write { border-color: var(--md-sys-color-tertiary); }
+.frame-time { font-size: 11px; color: var(--md-sys-color-on-surface-variant); }
+.frame-arrow { align-self: center; color: var(--md-sys-color-on-surface-variant); }
+.heart-row { display: flex; align-items: center; gap: 14px; padding: 3px 0; }
+.heart-name { min-width: 190px; font-size: 12.5px; }
+.heart-svg { width: 220px; height: 30px; }
+.heart-svg polyline { fill: none; stroke: var(--md-sys-color-primary); stroke-width: 1.6; }
+.heart-wrote polyline { stroke: var(--md-sys-color-tertiary); }
