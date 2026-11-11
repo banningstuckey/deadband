@@ -20,15 +20,17 @@ and the app loads the same CSS files with plain `<link>` tags in
 `ui/index.html`. Upstream nmui keeps its CSS-import design — this is
 an app-side adaptation for the desktop webview, not an nmui change.
 
-- **Pinned version:** nmui v0.43.1 (local checkout, `app.js` version;
+- **Pinned version:** nmui v0.43.3 (local checkout, `app.js` version;
   the checkout carries no git history, so no repo commit to record)
 - **Vendored:** 2026-11-10 (v0.40.0) · re-vendored 2026-11-11 (v0.43.0,
-  then v0.43.1 the same day): against the v0.40.0 pin the shell
-  components diffed byte-identical at v0.43.0, so that bump only
-  added menu + text-field for the Settings exposed-dropdown fields;
-  v0.43.1 brings the navigation rail-group legibility fix (group
-  parents carry [data-group-active]; Deadband's rail has no groups,
-  so it is behavior-neutral here, but the pin stays current)
+  v0.43.1, then v0.43.3 the same day): against the v0.40.0 pin the
+  shell components diffed byte-identical at v0.43.0, so that bump
+  only added menu + text-field for the Settings exposed-dropdown
+  fields; v0.43.1 brought the navigation rail-group legibility fix
+  and v0.43.3 the collapsed-rail hover-expand + group-parent tiles
+  (Play Console pattern). Deadband's rail is expanded and has no
+  groups, so both navigation changes are behavior-neutral here —
+  the pin stays current because Banning tracks nmui closely.
 - **Scope:** shell and standard controls only. The Purdue map, risk
   timeline, and other data visualisations are custom SVG/canvas and
   never nmui.

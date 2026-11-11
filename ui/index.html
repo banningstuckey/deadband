@@ -360,7 +360,7 @@
         </nmui-card>
       </section>
 
-      <footer class="note">UI: nmui v0.43.1, vendored and pinned (ui/vendor/nmui) · Themes selectable in Settings</footer>
+      <footer class="note">UI: nmui v0.43.3, vendored and pinned (ui/vendor/nmui) · Themes selectable in Settings</footer>
     </main>
   </div>
 
@@ -767,6 +767,16 @@
       if (readout.textContent !== text) readout.textContent = text;
     }
   }
+  // Heartbeat geometry uses a FIXED viewBox (0 0 1000 30) stretched
+  // with preserveAspectRatio="none", so the line always spans the
+  // widget's full width. The previous build measured the laid-out
+  // pixel width every refresh and sized the viewBox to it — but that
+  // measurement moves: on load it reads small (or 0 while the board
+  // is hidden), and the readout text changing width resizes the
+  // flexed SVG. A viewBox narrower than the element letterboxes
+  // (short centered lines, img 3) and every re-measure shifts the
+  // line sideways (imgs 1 vs 2). Fixed coordinates can't move.
+  const HEART_VIEW_W = 1000;
   // Build one heartbeat row (once). Rows are NEVER rebuilt on
   // refresh — renderHearts only updates them in place. The old code
   // did body.innerHTML = '' every 5s, which destroyed the SVG under
@@ -780,17 +790,22 @@
     name.className = 'heart-name';
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('class', 'heart-svg');
+    svg.setAttribute('viewBox', '0 0 ' + HEART_VIEW_W + ' 30');
+    svg.setAttribute('preserveAspectRatio', 'none');
     svg.setAttribute('role', 'img');
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    line.setAttribute('vector-effect', 'non-scaling-stroke');
     svg.appendChild(line);
     const vline = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     vline.setAttribute('class', 'heart-vline');
+    vline.setAttribute('vector-effect', 'non-scaling-stroke');
     vline.setAttribute('y1', '0');
     vline.setAttribute('y2', '30');
     vline.style.display = 'none';
     svg.appendChild(vline);
     const marker = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     marker.setAttribute('class', 'heart-marker');
+    marker.setAttribute('vector-effect', 'non-scaling-stroke');
     marker.setAttribute('r', '3.6');
     marker.style.display = 'none';
     svg.appendChild(marker);
@@ -815,13 +830,13 @@
   // Refresh one row's numbers and geometry in place. The hit rects,
   // marker and listeners stay put, so a hover (or drag) across the
   // rows is never interrupted by the 5s refresh.
-  function updateHeartRow(row, hb, W) {
+  function updateHeartRow(row, hb) {
     const BINS = hb.bins.length;
+    const W = HEART_VIEW_W;
     const name = row.querySelector('.heart-name');
     if (name) name.textContent = hb.deviceName + (hb.wrote ? ' \u00b7 wrote' : '');
     const svg = row.querySelector('.heart-svg');
     svg.classList.toggle('heart-wrote', !!hb.wrote);
-    svg.setAttribute('viewBox', '0 0 ' + W + ' 30');
     svg.setAttribute('aria-label', hb.deviceName + ' heartbeat: ' + hb.defaultValue + '.');
     const line = svg.querySelector('polyline');
     line.setAttribute('points', hb.bins.map((v, i) =>
@@ -880,13 +895,8 @@
         row = buildHeartRow(d);
         body.appendChild(row);
       }
-      const svg = row.querySelector('.heart-svg');
-      // Full width: size the viewBox to the laid-out element (1:1
-      // scale keeps the marker round). Falls back to 220 when the
-      // widget is hidden or layout is unavailable.
-      const W = Math.max(220, Math.round(svg.getBoundingClientRect().width) || 0);
-      row._hb = { bins, writeBins, max, wrote, deviceName, defaultValue, tMin, slice, width: W };
-      updateHeartRow(row, row._hb, W);
+      row._hb = { bins, writeBins, max, wrote, deviceName, defaultValue, tMin, slice, width: HEART_VIEW_W };
+      updateHeartRow(row, row._hb);
     });
     body.querySelectorAll('.heart-row').forEach((row) => {
       if (!seen.has(row.dataset.ip)) row.remove();

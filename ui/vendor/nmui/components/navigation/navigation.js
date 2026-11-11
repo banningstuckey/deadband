@@ -65,6 +65,10 @@ class NMUINavigation extends HTMLElement {
   #switchTimer = null;
   #labelTimer = null;
   #scrim = null;
+  #hoverTimer = 0;
+  #hoverExpanded = false;
+  #hoverOpened = null;
+  #hoverPoint = null;
 
   static observedAttributes = ["expanded", "collapsed"];
 
@@ -183,6 +187,9 @@ class NMUINavigation extends HTMLElement {
       const group = dest.nextElementSibling;
       if (group?.tagName === "SECTION") {
         this.#toggleGroup(group, dest);
+        // A manual toggle owns the group now — a hover
+        // restore must not re-open it on pointerleave.
+        if (this.#hoverOpened === group) this.#hoverOpened = null;
         return;
       }
       this.#select(dest);
@@ -195,6 +202,20 @@ class NMUINavigation extends HTMLElement {
       if (this.hasAttribute("open")) {
         document.addEventListener("keydown", this.#onKey);
       }
+    }
+
+    // Hover-expand (the Play Console pattern): a collapsed
+    // rail expands while the pointer — or keyboard focus —
+    // is inside it, and the group under the pointer opens so
+    // its options show. The persisted variant is untouched:
+    // leaving restores [collapsed]. Hover-capable pointers
+    // only; touch users tap the collapse button instead.
+    if (window.matchMedia("(hover: hover)").matches) {
+      this.addEventListener("pointerenter", this.#onHoverEnter);
+      this.addEventListener("pointerleave", this.#onHoverLeave);
+      this.addEventListener("pointerover", this.#onHoverOver);
+      this.addEventListener("focusin", this.#onFocusEnter);
+      this.addEventListener("focusout", this.#onFocusLeave);
     }
 
     // Group parents carry [data-group-active] while one of
@@ -323,6 +344,93 @@ class NMUINavigation extends HTMLElement {
       group._openTarget = undefined;
       group.removeAttribute("data-sliding");
     };
+  }
+
+  // --- hover-expand -------------------------------------------------
+  // A collapsed rail expands while the pointer (or keyboard
+  // focus) is inside it. The group under the pointer opens
+  // with it; leaving restores the collapsed variant and
+  // closes only the group the hover itself opened.
+
+  #onHoverEnter = () => {
+    if (!this.hasAttribute("collapsed") || this.hasAttribute("modal")) return;
+    clearTimeout(this.#hoverTimer);
+    this.#hoverTimer = setTimeout(() => this.#hoverExpand(), 120);
+  };
+
+  #onHoverLeave = () => {
+    clearTimeout(this.#hoverTimer);
+    this.#hoverRestore();
+  };
+
+  #onHoverOver = (e) => {
+    if (e.pointerType && e.pointerType !== "mouse") return;
+    this.#hoverPoint = { x: e.clientX, y: e.clientY };
+    if (this.#hoverExpanded) this.#hoverOpenAtPoint();
+  };
+
+  #onFocusEnter = () => {
+    if (!this.hasAttribute("collapsed") || this.hasAttribute("modal")) return;
+    clearTimeout(this.#hoverTimer);
+    this.#hoverExpand();
+  };
+
+  #onFocusLeave = (e) => {
+    if (e.relatedTarget && this.contains(e.relatedTarget)) return;
+    clearTimeout(this.#hoverTimer);
+    this.#hoverRestore();
+  };
+
+  #hoverExpand() {
+    if (this.#hoverExpanded || !this.hasAttribute("collapsed")) return;
+    this.#hoverExpanded = true;
+    this.setAttribute("expanded", "");
+    this.removeAttribute("collapsed");
+    this.#hoverOpenAtPoint();
+  }
+
+  #hoverRestore() {
+    if (!this.#hoverExpanded) return;
+    this.#hoverExpanded = false;
+    if (this.#hoverOpened) {
+      const group = this.#hoverOpened;
+      this.#hoverOpened = null;
+      if (group.hasAttribute("open")) {
+        this.#toggleGroup(group, group.previousElementSibling);
+      }
+    }
+    this.setAttribute("collapsed", "");
+    this.removeAttribute("expanded");
+  }
+
+  #hoverOpenAtPoint() {
+    if (!this.#hoverPoint) return;
+    const el = document.elementFromPoint(this.#hoverPoint.x, this.#hoverPoint.y);
+    const dest = el?.closest?.("a, button");
+    const group = dest?.nextElementSibling;
+    // Moving off a group closes the one the hover opened,
+    // even when the new spot has no section of its own.
+    if (group?.tagName !== "SECTION") {
+      if (this.#hoverOpened) {
+        const prev = this.#hoverOpened;
+        this.#hoverOpened = null;
+        if (prev.hasAttribute("open")) {
+          this.#toggleGroup(prev, prev.previousElementSibling);
+        }
+      }
+      return;
+    }
+    if (this.#hoverOpened && this.#hoverOpened !== group) {
+      const prev = this.#hoverOpened;
+      this.#hoverOpened = null;
+      if (prev.hasAttribute("open")) {
+        this.#toggleGroup(prev, prev.previousElementSibling);
+      }
+    }
+    if (!group.hasAttribute("open")) {
+      this.#hoverOpened = group;
+      this.#toggleGroup(group, dest);
+    }
   }
 
   /**

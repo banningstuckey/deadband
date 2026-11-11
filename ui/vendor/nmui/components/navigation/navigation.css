@@ -244,6 +244,17 @@ nmui-navigation[rail][collapsed] > destinations section {
   display: none;
 }
 
+/* Collapsed, a group parent is a tinted tile (surface-
+   container-high on the rail's surface) so it reads at a
+   glance as "there's more under this one" — the Play
+   Console pattern. Plain destinations stay unpainted.
+   The hover/selected pill (::before) still paints above
+   the tile, so the states stack cleanly. */
+nmui-navigation[rail][collapsed] > destinations :is(a, button):has(+ section) {
+  background-color: var(--md-sys-color-surface-container-high, #e6e0e9);
+  border-radius: var(--md-sys-shape-corner-large, 16px);
+}
+
 nmui-navigation[rail][expanded] > destinations section {
   display: none;
 }
