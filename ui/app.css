@@ -94,9 +94,24 @@ main {
   border-color: transparent;
 }
 
+/* The dashboard area is a standard 12-column grid at every size:
+   widgets carry column spans, so order and layout never change with
+   window width (the old fullscreen composition pinned the map to a
+   row span and scrambled the order). Narrow windows stack full-width. */
+#view-live { grid-template-columns: repeat(12, minmax(0, 1fr)); }
+@media (max-width: 900px) {
+  #view-live [data-widget] { grid-column: 1 / -1 !important; }
+}
+.widget-resize {
+  position: absolute; right: 5px; bottom: 5px; width: 18px; height: 18px; z-index: 6;
+  cursor: nwse-resize; touch-action: none;
+  border-right: 2.5px solid var(--md-sys-color-outline);
+  border-bottom: 2.5px solid var(--md-sys-color-outline);
+  border-bottom-right-radius: 6px; opacity: 0.75;
+}
+#view-live .card-title { cursor: grab; }
+
 @media (min-width: 1500px) {
-  #view-live { grid-template-columns: minmax(0, 7fr) minmax(340px, 4fr); }
-  #view-live .map-card { grid-row: 2 / span 4; align-self: start; }
   #view-rules { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   #view-rules .scenarios-card { grid-column: 1 / -1; }
 }

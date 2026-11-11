@@ -68,7 +68,7 @@
         <div class="dash-palette span-all" id="dash-palette" hidden>
           <span class="stat-label">Add widget:</span>
           <span id="dash-palette-chips"></span>
-          <span class="dim">Hold the ⠿ grip and drag to reorder · Half/Full width resizes · × removes a card (it stays available here) · Save keeps it, Cancel undoes</span>
+          <span class="dim">Drag by the title bar to reorder · drag the corner handle to resize (snaps to the 12-column grid) · × removes a card · Save keeps it, Cancel undoes</span>
         </div>
         <nmui-card outlined class="overview-card" data-widget="overview">
           <div class="overview-grid">
@@ -1176,12 +1176,13 @@
     story: 'Incident storyboard', traj: 'Trajectory', heart: 'Heartbeats',
   };
   const WIDGET_IDS = Object.keys(WIDGET_NAMES);
-  const FULL_BY_DEFAULT = ['overview', 'story', 'traj', 'heart'];
+  const DEFAULT_COLS = { overview: 12, map: 12, detail: 6, engine: 6, plant: 6, safety: 6, story: 12, traj: 12, heart: 12 };
+  const COL_STEPS = [3, 4, 6, 8, 12];
   const DASH_KEY = 'deadband.dashboards.v2';
   function defaultDashboards() {
     return [
       { id: 'main', name: 'Overview', desc: 'The 10-second glance: plant state, the gauge, the map, the latest incident.',
-        widgets: ['overview', 'map', 'detail', 'story'], seen: 0 },
+        widgets: ['overview', 'map', 'detail', 'story'], sizes: { map: 8, detail: 4 }, seen: 0 },
       { id: 'incidents', name: 'Incidents', desc: 'When something fires: how the story unfolded, who is climbing, device rhythm.',
         widgets: ['story', 'traj', 'overview', 'heart'], seen: 0 },
       { id: 'rhythm', name: 'Plant rhythm', desc: 'Every device heartbeat on one board — steady is healthy, frantic or flat is not.',
@@ -1207,7 +1208,13 @@
   let dashSnapshot = null;
   const currentDash = () => dashboards.find((d) => d.id === activeDash) || dashboards[0];
   const widgetEl = (id) => document.querySelector('#view-live [data-widget="' + id + '"]');
-  const widgetSize = (d, id) => (d.sizes && d.sizes[id]) || (FULL_BY_DEFAULT.includes(id) ? 'full' : 'half');
+  const widgetCols = (d, id) => {
+    const v = d.sizes && d.sizes[id];
+    if (typeof v === 'number') return v;
+    if (v === 'full') return 12;
+    if (v === 'half') return 6;
+    return DEFAULT_COLS[id] || 6;
+  };
   function saveDashboards() {
     try { localStorage.setItem(DASH_KEY, JSON.stringify({ dashboards, activeDash })); } catch (err) {}
   }
@@ -1284,7 +1291,7 @@
       const idx = d.widgets.indexOf(id);
       el.style.display = idx >= 0 ? '' : 'none';
       el.style.order = idx >= 0 ? String(idx + 2) : '99';
-      el.style.gridColumn = idx >= 0 && widgetSize(d, id) === 'full' ? '1 / -1' : '';
+      el.style.gridColumn = idx >= 0 ? 'span ' + widgetCols(d, id) + ' / span ' + widgetCols(d, id) : '';
     });
     renderTabs();
     renderPalette();
@@ -1303,6 +1310,33 @@
       const el = widgetEl(id);
       if (!el) return;
       const onBoard = d.widgets.includes(id);
+      // Drag starts from the card's title bar (or the overview card's
+      // body — it has no title and no controls), never from buttons,
+      // the map, or the tools themselves.
+      if (!el.dataset.dragWired) {
+        el.dataset.dragWired = '1';
+        el.addEventListener('pointerdown', (e) => {
+          if (!customizing) return;
+          const t = e.target;
+          if (t.closest('.widget-tools') || t.closest('.widget-resize')) return;
+          if (t.closest('.card-title') || (id === 'overview' && !t.closest('button, select, input, a'))) {
+            startWidgetDrag(e, el, id);
+          }
+        });
+      }
+      // Corner resize handle (customize mode only, on-board only).
+      let handle = el.querySelector(':scope > .widget-resize');
+      if (customizing && onBoard) {
+        if (!handle) {
+          handle = document.createElement('div');
+          handle.className = 'widget-resize';
+          handle.title = 'Drag to resize — snaps to columns';
+          handle.addEventListener('pointerdown', (e) => startWidgetResize(e, el, id));
+          el.appendChild(handle);
+        }
+      } else if (handle) {
+        handle.remove();
+      }
       el.classList.toggle('customizing', customizing && onBoard);
       let tools = el.querySelector(':scope > .widget-tools');
       if (customizing && onBoard) {
@@ -1321,7 +1355,9 @@
             ev.stopPropagation();
             const dd = currentDash();
             if (!dd.sizes) dd.sizes = {};
-            dd.sizes[id] = widgetSize(dd, id) === 'full' ? 'half' : 'full';
+            const now = widgetCols(dd, id);
+            const next = COL_STEPS[(COL_STEPS.indexOf(now) + 1) % COL_STEPS.length] || 12;
+            dd.sizes[id] = next;
             applyDashboard(); refreshChrome();
           });
           const x = document.createElement('button');
@@ -1338,7 +1374,7 @@
           el.appendChild(tools);
         }
         const sizeBtn = tools.querySelector('[data-size-for]');
-        if (sizeBtn) sizeBtn.textContent = widgetSize(d, id) === 'full' ? 'Full width' : 'Half width';
+        if (sizeBtn) sizeBtn.textContent = widgetCols(d, id) + ' / 12 cols';
       } else if (tools) {
         tools.remove();
       }
@@ -1368,6 +1404,32 @@
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
       card.classList.remove('dragging');
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
+  // Corner drag-resize: column width from the grid container, snapped
+  // to whole columns (3–12) as the pointer moves.
+  function startWidgetResize(e, card, id) {
+    if (!customizing) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const grid = document.getElementById('view-live');
+    const colW = grid.getBoundingClientRect().width / 12;
+    const startX = e.clientX;
+    const d = currentDash();
+    if (!d.sizes) d.sizes = {};
+    const startCols = widgetCols(d, id);
+    const move = (ev) => {
+      const cols = Math.min(12, Math.max(3, Math.round(startCols + (ev.clientX - startX) / colW)));
+      if (cols !== widgetCols(d, id)) {
+        d.sizes[id] = cols;
+        applyDashboard(); refreshChrome();
+      }
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
