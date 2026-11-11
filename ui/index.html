@@ -227,6 +227,32 @@
             <span class="dim">Showing only <strong id="log-device-name"></strong></span>
             <button class="chip-btn" id="log-device-clear">✕ clear</button>
           </div>
+          <div class="query-bar">
+            <div class="query-input-wrap">
+              <input id="query-input" class="text-input query-input" type="text" spellcheck="false"
+                placeholder="Query the log — kind:write dst:10.0.1.11 last:1h (Enter to run)"
+                autocomplete="off" aria-label="Query the event log">
+              <div class="query-suggest" id="query-suggest" hidden></div>
+            </div>
+            <button class="chip-btn" id="query-run">Search</button>
+            <button class="chip-btn" id="query-ai-toggle" aria-label="Ask in plain English" title="Ask in plain English">&#10022; AI</button>
+          </div>
+          <div class="query-ai" id="query-ai" hidden>
+            <input id="query-ai-input" class="text-input query-input" type="text" spellcheck="false"
+              placeholder="Ask in plain English — e.g. writes to PLC1 from anything but the HMI"
+              autocomplete="off" aria-label="Ask the local model in plain English">
+            <button class="chip-btn" id="query-ai-ask">Ask</button>
+            <span class="dim" id="query-ai-status"></span>
+          </div>
+          <div class="filter-row" id="query-status" hidden>
+            <span class="dim">Query: <strong id="query-status-text"></strong> — <span id="query-status-count"></span></span>
+            <button class="chip-btn" id="query-status-clear">&#10005; back to live</button>
+          </div>
+          <p class="dim">Query terms, space-separated: <code>kind:write</code>
+          <code>kind:alert</code> <code>src:</code> / <code>dst:</code> /
+          <code>ip:</code> an address, <code>text:</code> words,
+          <code>last:1h</code>, <code>!</code> negates. A bare word searches
+          the summary. The live stream pauses while a query is shown.</p>
           <p class="dim">"Important" is the default — alerts, writes, new devices, analyst
           notes. The full firehose (every routine read) is under "All traffic".</p>
           <div id="event-log" class="event-log">
@@ -346,6 +372,31 @@
           </div>
           <p class="dim">Preferences live on this machine only, like everything
           else in Deadband.</p>
+        </nmui-card>
+
+        <nmui-card outlined>
+          <h2 class="card-title">Local AI (Ollama)</h2>
+          <p id="ai-status">Checking for a local model…</p>
+          <p class="dim">The analyst and the plain-English log query both run
+          on a model on this machine, through Ollama — nothing is sent
+          anywhere. Ollama is a separate app Deadband can't bundle (it's
+          ~1&nbsp;GB plus several GB per model, with its own installer),
+          so it installs once, outside Deadband:</p>
+          <ol class="dim">
+            <li>Download and install it from
+              <a href="https://ollama.com/download" target="_blank" rel="noopener">ollama.com/download</a>
+              (macOS, Windows, or Linux).</li>
+            <li>In a terminal, pull a model: <code>ollama pull llama3</code>
+              — the small general model Deadband is tuned for.</li>
+            <li>Come back here and hit Recheck. Ollama starts itself on
+              login; Deadband finds it at 127.0.0.1:11434.</li>
+          </ol>
+          <p class="dim">Deadband works fully without it — the analyst and
+          the AI query toggle just stay quiet until a model is there.
+          Full steps live in <code>docs/setup-ai.md</code> in the repo.</p>
+          <div class="card-actions">
+            <nmui-button tonal id="ai-recheck">Recheck</nmui-button>
+          </div>
         </nmui-card>
 
         <nmui-card outlined>
@@ -480,6 +531,7 @@
     return kind === 'alert' || kind === 'write' || kind === 'discovery' || kind === 'analyst';
   }
   function rowShown(row) {
+    if (queryActive) return true;
     const kind = (row.className.match(/kind-(\w+)/) || [])[1];
     if (!rowVisible(kind)) return false;
     if (!logDevice.length) return true;
@@ -518,6 +570,217 @@
     const chip = document.getElementById('log-device-filter');
     if (chip) chip.hidden = true;
     applyLogFilters();
+  });
+
+  // ---- log query: structured search + autocomplete + AI ----------
+  // A query runs against the SQLite store (not just the rows on
+  // screen), so it reaches back through everything Deadband has
+  // stored. While a query is shown the live stream pauses — new
+  // events still land in the store, they just don't join the results.
+  let queryActive = false;
+  let queryText = '';
+  const queryInputEl = document.getElementById('query-input');
+  const querySuggestEl = document.getElementById('query-suggest');
+  const queryStatusRow = document.getElementById('query-status');
+  const queryStatusText = document.getElementById('query-status-text');
+  const queryStatusCount = document.getElementById('query-status-count');
+  const queryAiRow = document.getElementById('query-ai');
+  const queryAiInput = document.getElementById('query-ai-input');
+  const queryAiStatus = document.getElementById('query-ai-status');
+  const queryAiAsk = document.getElementById('query-ai-ask');
+  const queryAiToggle = document.getElementById('query-ai-toggle');
+
+  async function loadBacklog() {
+    if (!invoke) return;
+    try {
+      const backlog = await invoke('recent_events', { limit: 60 });
+      backlog.forEach((dto) => addRow(dto, false));
+    } catch (err) { /* empty log is fine */ }
+  }
+
+  async function runQuery(text) {
+    const q = (text || '').trim();
+    if (!q) { clearQuery(); return; }
+    if (!invoke) return;
+    if (queryInputEl) queryInputEl.value = q;
+    let results;
+    try {
+      results = await invoke('query_events', { query: q, limit: 200 });
+    } catch (err) {
+      // A parse error from the shell names the problem in plain
+      // English — show it where the count would go.
+      if (queryStatusText) queryStatusText.textContent = q;
+      if (queryStatusCount) queryStatusCount.textContent = 'Error: ' + err;
+      if (queryStatusRow) queryStatusRow.hidden = false;
+      return;
+    }
+    // One filter at a time: a query replaces the device filter.
+    logDevice = [];
+    const chip = document.getElementById('log-device-filter');
+    if (chip) chip.hidden = true;
+    queryActive = true;
+    queryText = q;
+    logEl.innerHTML = '';
+    results.forEach((dto) => addRow(dto, false));
+    if (queryStatusText) queryStatusText.textContent = q;
+    if (queryStatusCount) queryStatusCount.textContent =
+      results.length + (results.length === 1 ? ' event' : ' events');
+    if (queryStatusRow) queryStatusRow.hidden = false;
+  }
+
+  function clearQuery() {
+    queryActive = false;
+    queryText = '';
+    if (queryInputEl) queryInputEl.value = '';
+    if (queryStatusRow) queryStatusRow.hidden = true;
+    logEl.innerHTML = '';
+    loadBacklog();
+  }
+
+  const queryRunBtn = document.getElementById('query-run');
+  if (queryRunBtn) queryRunBtn.addEventListener('click', () => runQuery(queryInputEl.value));
+  const queryStatusClear = document.getElementById('query-status-clear');
+  if (queryStatusClear) queryStatusClear.addEventListener('click', clearQuery);
+
+  // ---- query autocomplete -------------------------------------------
+  const QUERY_FIELDS = ['kind:', 'src:', 'dst:', 'ip:', 'text:', 'last:'];
+  const QUERY_KINDS = ['alert', 'write', 'read', 'discovery', 'connection', 'packet', 'analyst'];
+  const QUERY_WINDOWS = ['5m', '15m', '30m', '1h', '6h', '24h', '7d'];
+  let querySuggestIdx = -1;
+  let querySuggestItems = [];
+  function queryTokenAt(input) {
+    const pos = input.selectionStart || 0;
+    const before = input.value.slice(0, pos);
+    const start = Math.max(before.lastIndexOf(' '), before.lastIndexOf('\t'), before.lastIndexOf('\n')) + 1;
+    return { token: before.slice(start), start, end: pos };
+  }
+  function querySuggestions(token) {
+    const colon = token.indexOf(':');
+    if (colon === -1) {
+      return QUERY_FIELDS.filter((f) => f.startsWith(token))
+        .map((f) => ({ insert: f, label: f, hint: 'field' }));
+    }
+    const field = token.slice(0, colon + 1);
+    const value = token.slice(colon + 1).toLowerCase();
+    if (field === 'kind:') {
+      return QUERY_KINDS.filter((k) => k.startsWith(value))
+        .map((k) => ({ insert: 'kind:' + k, label: k, hint: 'kind' }));
+    }
+    if (field === 'last:') {
+      return QUERY_WINDOWS.filter((w) => w.startsWith(value))
+        .map((w) => ({ insert: 'last:' + w, label: w, hint: 'window' }));
+    }
+    if (field === 'src:' || field === 'dst:' || field === 'ip:') {
+      const devices = (typeof snapshot !== 'undefined' && snapshot && snapshot.devices) || [];
+      return devices
+        .filter((d) => (d.ip || '').startsWith(value) ||
+          (d.label || '').toLowerCase().includes(value))
+        .slice(0, 8)
+        .map((d) => ({ insert: field + (d.ip || ''), label: d.ip || '', hint: d.label || d.role || '' }));
+    }
+    return [];
+  }
+  function renderQuerySuggest() {
+    if (!queryInputEl || !querySuggestEl) return;
+    const { token } = queryTokenAt(queryInputEl);
+    querySuggestItems = querySuggestions(token);
+    querySuggestIdx = -1;
+    if (!querySuggestItems.length) { querySuggestEl.hidden = true; return; }
+    querySuggestEl.innerHTML = '';
+    querySuggestItems.forEach((item, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('aria-selected', 'false');
+      b.textContent = item.label;
+      if (item.hint) {
+        const span = document.createElement('span');
+        span.className = 'q-hint';
+        span.textContent = item.hint;
+        b.appendChild(span);
+      }
+      // mousedown, not click: blur would hide the list first.
+      b.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        insertQuerySuggestion(i);
+      });
+      querySuggestEl.appendChild(b);
+    });
+    querySuggestEl.hidden = false;
+  }
+  function insertQuerySuggestion(i) {
+    if (!queryInputEl || !querySuggestItems[i]) return;
+    const { start, end } = queryTokenAt(queryInputEl);
+    const item = querySuggestItems[i];
+    queryInputEl.value =
+      queryInputEl.value.slice(0, start) + item.insert + ' ' + queryInputEl.value.slice(end);
+    const pos = start + item.insert.length + 1;
+    queryInputEl.setSelectionRange(pos, pos);
+    queryInputEl.focus();
+    renderQuerySuggest();
+  }
+  function markQuerySuggest(idx) {
+    querySuggestIdx = idx;
+    [...querySuggestEl.children].forEach((b, i) =>
+      b.setAttribute('aria-selected', String(i === idx)));
+  }
+  if (queryInputEl) {
+    queryInputEl.addEventListener('input', renderQuerySuggest);
+    queryInputEl.addEventListener('focus', renderQuerySuggest);
+    queryInputEl.addEventListener('blur', () => { querySuggestEl.hidden = true; });
+    queryInputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        if (querySuggestEl.hidden || !querySuggestItems.length) return;
+        e.preventDefault();
+        const dir = e.key === 'ArrowDown' ? 1 : -1;
+        markQuerySuggest((querySuggestIdx + dir + querySuggestItems.length) % querySuggestItems.length);
+      } else if (e.key === 'Enter') {
+        if (!querySuggestEl.hidden && querySuggestIdx >= 0) {
+          e.preventDefault();
+          insertQuerySuggestion(querySuggestIdx);
+        } else {
+          querySuggestEl.hidden = true;
+          runQuery(queryInputEl.value);
+        }
+      } else if (e.key === 'Tab') {
+        if (!querySuggestEl.hidden && querySuggestIdx >= 0) {
+          e.preventDefault();
+          insertQuerySuggestion(querySuggestIdx);
+        }
+      } else if (e.key === 'Escape') {
+        querySuggestEl.hidden = true;
+      }
+    });
+  }
+
+  // ---- plain-English query (local AI) -------------------------------
+  if (queryAiToggle) queryAiToggle.addEventListener('click', () => {
+    const open = queryAiRow.hidden;
+    queryAiRow.hidden = !open;
+    queryAiToggle.toggleAttribute('selected', open);
+    if (open && queryAiInput) queryAiInput.focus();
+  });
+  async function askAi() {
+    if (!queryAiInput) return;
+    const text = queryAiInput.value.trim();
+    if (!text) return;
+    if (queryAiAsk) queryAiAsk.disabled = true;
+    if (queryAiStatus) queryAiStatus.textContent = 'Asking the local model…';
+    try {
+      const res = await invoke('translate_query', { text, model: analystModel || null });
+      if (queryInputEl) queryInputEl.value = res.query;
+      if (queryAiStatus) queryAiStatus.textContent = '';
+      if (queryAiRow) queryAiRow.hidden = true;
+      if (queryAiToggle) queryAiToggle.removeAttribute('selected');
+      await runQuery(res.query);
+    } catch (err) {
+      if (queryAiStatus) queryAiStatus.textContent = String(err);
+    } finally {
+      if (queryAiAsk) queryAiAsk.disabled = false;
+    }
+  }
+  if (queryAiAsk) queryAiAsk.addEventListener('click', askAi);
+  if (queryAiInput) queryAiInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') askAi();
   });
 
   try {
@@ -1059,8 +1322,25 @@
     setMenuField('set-model-field', v || 'First available');
   });
 
+  const aiStatusEl = document.getElementById('ai-status');
+  const aiRecheckBtn = document.getElementById('ai-recheck');
+  async function loadAiCard() {
+    if (!invoke || !aiStatusEl) return;
+    try {
+      const a = await invoke('analyst_status');
+      aiStatusEl.textContent = a.reachable
+        ? 'Ollama is running. ' + (a.models.length
+            ? 'Models installed: ' + a.models.join(', ') + '.'
+            : 'No models installed yet — run: ollama pull llama3')
+        : 'No local model detected (Ollama not running at 127.0.0.1:11434). ' +
+          'Deadband works fully without it — install it from ollama.com/download and pull a model when you want the analyst and the AI query toggle.';
+    } catch (err) { /* AI card is best-effort */ }
+  }
+  if (aiRecheckBtn) aiRecheckBtn.addEventListener('click', loadAiCard);
+
   async function loadAnalyst() {
     if (!invoke) return;
+    loadAiCard();
     try {
       const a = await invoke('analyst_status');
       analystStatusEl.textContent = a.message;
@@ -1155,13 +1435,11 @@
       });
     } catch (err) { /* roster is decorative until the sim runs */ }
     // Backlog, newest first — appended in order so newest stays on top.
-    try {
-      const backlog = await invoke('recent_events', { limit: 60 });
-      backlog.forEach((dto) => addRow(dto, false));
-    } catch (err) { /* empty log is fine */ }
-    // Live stream.
+    await loadBacklog();
+    // Live stream. While a query is shown, new events still land in
+    // the store — they just don't join the results.
     if (listen) {
-      await listen('traffic', (e) => addRow(e.payload, true));
+      await listen('traffic', (e) => { if (!queryActive) addRow(e.payload, true); });
     }
     refreshStatus();
     setInterval(refreshStatus, 2000);

@@ -90,6 +90,33 @@ main {
    so a hidden filter row stayed on screen anyway (the device-filter
    chip never visually cleared). Same pattern as .view[hidden] below. */
 .filter-row[hidden] { display: none; }
+
+/* Log query bar: structured search over stored events, with
+   autocomplete and a plain-English (local AI) toggle. The [hidden]
+   overrides matter — display:flex/grid beat the browser's built-in
+   [hidden] rule (the device-filter chip taught us that). */
+.query-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 4px 0 8px; }
+.query-input-wrap { position: relative; flex: 1 1 320px; min-width: 240px; }
+.query-input { width: 100%; }
+.query-suggest {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 10;
+  background: var(--md-sys-color-surface-container-high);
+  border: 1px solid var(--md-sys-color-outline-variant); border-radius: 10px;
+  margin-top: 4px; max-height: 240px; overflow: auto;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
+}
+.query-suggest[hidden] { display: none; }
+.query-suggest button {
+  display: block; width: 100%; text-align: left; background: none; border: 0;
+  padding: 8px 12px; font: inherit; font-size: 13px;
+  color: var(--md-sys-color-on-surface); cursor: pointer;
+}
+.query-suggest button[aria-selected="true"],
+.query-suggest button:hover { background: var(--md-sys-color-surface-container); }
+.query-suggest .q-hint { color: var(--md-sys-color-on-surface-variant); margin-left: 8px; }
+.query-ai { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 4px 0 8px; }
+.query-ai[hidden] { display: none; }
+.query-ai .query-input { flex: 1 1 320px; min-width: 240px; }
 .chip-btn {
   font: inherit; font-size: 12.5px; padding: 6px 14px; border-radius: 999px; cursor: pointer;
   color: var(--md-sys-color-on-surface-variant);

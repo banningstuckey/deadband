@@ -340,6 +340,40 @@ impl Store {
         )?)
     }
 
+    /// Stored events matching a parsed query, newest first.
+    /// The WHERE clause comes from [`crate::query::Query::to_sql`];
+    /// values are always bound parameters, never interpolated.
+    pub fn query_events(&self, query: &crate::query::Query, limit: i64) -> Result<Vec<Event>> {
+        let (where_sql, mut params) = query.to_sql();
+        params.push(rusqlite::types::Value::Integer(limit.max(1)));
+        let sql = format!(
+            "SELECT id, timestamp, kind, src_ip, dst_ip, summary \
+             FROM events WHERE {where_sql} ORDER BY id DESC LIMIT ?"
+        );
+        let mut stmt = self.conn.prepare(&sql)?;
+        let rows = stmt.query_map(
+            rusqlite::params_from_iter(params.iter()),
+            |row| {
+                let kind_text: String = row.get(2)?;
+                let src_text: Option<String> = row.get(3)?;
+                let dst_text: Option<String> = row.get(4)?;
+                Ok(Event {
+                    id: row.get(0)?,
+                    timestamp: row.get(1)?,
+                    kind: kind_from_tag(&kind_text),
+                    src_ip: src_text.as_deref().and_then(|text| text.parse().ok()),
+                    dst_ip: dst_text.as_deref().and_then(|text| text.parse().ok()),
+                    summary: row.get(5)?,
+                })
+            },
+        )?;
+        let mut events = Vec::new();
+        for event in rows {
+            events.push(event?);
+        }
+        Ok(events)
+    }
+
     /// The most recent events, newest first (the UI's initial backlog).
     /// Kind tags are mapped back lossily — a stored Modbus event keeps
     /// its summary text, which carries the detail the log displays.
@@ -371,7 +405,7 @@ impl Store {
 
 /// Inverse of [`event_kind_tag`], lossy for kinds that carry data
 /// (their detail survives in the event summary text).
-fn kind_from_tag(tag: &str) -> EventKind {
+pub(crate) fn kind_from_tag(tag: &str) -> EventKind {
     match tag {
         "device_discovered" => EventKind::DeviceDiscovered,
         "connection_observed" => EventKind::ConnectionObserved,

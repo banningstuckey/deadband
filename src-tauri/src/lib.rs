@@ -663,6 +663,111 @@ fn recent_events(state: tauri::State<AppState>, limit: i64) -> Vec<EventDto> {
     }
 }
 
+/// Stored events matching a structured log query (see
+/// `deadband_core::query` for the grammar). The UI shows the query
+/// back to the engineer, so what ran is always inspectable.
+#[tauri::command]
+fn query_events(
+    state: tauri::State<AppState>,
+    query: String,
+    limit: Option<i64>,
+) -> Result<Vec<EventDto>, String> {
+    let now_s = now_ms() / 1000;
+    let parsed = deadband_core::query::parse(&query, now_s).map_err(|e| e)?;
+    let store = state.store.lock().map_err(|_| "store lock poisoned".to_string())?;
+    let events = store
+        .query_events(&parsed, limit.unwrap_or(200).clamp(1, 500))
+        .map_err(|e| e.to_string())?;
+    Ok(events.iter().map(EventDto::from).collect())
+}
+
+/// What a plain-English question translated into.
+#[derive(Debug, Serialize)]
+struct TranslateDto {
+    query: String,
+    model: String,
+}
+
+/// Translates a plain-English log question into a structured query
+/// using the local model. The model gets the query grammar plus the
+/// known device roster (so "PLC1" can become its IP), and the result
+/// is validated against the real parser before it returns — a
+/// translation the parser rejects comes back as an error, never as
+/// a silently wrong filter. The UI always shows the generated query
+/// next to the results, so the engineer sees exactly what ran.
+#[tauri::command]
+async fn translate_query(
+    state: tauri::State<'_, AppState>,
+    text: String,
+    model: Option<String>,
+) -> Result<TranslateDto, String> {
+    let store = Arc::clone(&state.store);
+    let question = text.trim().to_string();
+    if question.is_empty() {
+        return Err("Ask something first — e.g. 'writes to PLC1 from anything but the HMI'.".to_string());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let chosen = model.filter(|m| !m.trim().is_empty()).or_else(|| {
+            http_local("GET", "/api/tags", None, std::time::Duration::from_secs(2))
+                .ok()
+                .and_then(|text| deadband_core::analyst::ollama_model_names(&text).into_iter().next())
+        });
+        let Some(model) = chosen else {
+            return Err("No local model available — is Ollama running with a model pulled?".to_string());
+        };
+        let roster = store
+            .lock()
+            .map(|store| store.list_devices().unwrap_or_default())
+            .unwrap_or_default()
+            .iter()
+            .take(40)
+            .map(|d| format!("{}={}", d.label.clone().unwrap_or_else(|| d.ip.to_string()), d.ip))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let prompt = format!(
+            "Translate a plain-English log question into a Deadband log query. Reply with ONLY the query, nothing else.
+
+             Grammar (space-separated terms, all must match):
+             kind:alert|write|read|discovery|connection|packet|analyst
+             src:<ip> dst:<ip> ip:<ip> (ip = either side)
+             text:<words> (substring of the event summary; text:"quoted phrase" for phrases)
+             last:30m|1h|24h|7d (relative time window)
+             ! before a term negates it: src:!10.0.2.10
+             A bare word searches the summary text.
+
+             Known devices (label=IP): {roster}
+
+             Examples:
+             "alerts in the last hour" -> kind:alert last:1h
+             "writes to Line 1 PLC" -> kind:write dst:10.0.1.11
+             "everything from the HMI that is not a read" -> src:10.0.2.10 !kind:read
+
+             Question: {question}"
+        );
+        let client = OllamaClient { model: model.clone() };
+        let raw = client
+            .explain(&prompt)
+            .map_err(|e| e.to_string())?;
+        let cleaned = raw
+            .lines()
+            .map(str::trim)
+            .find(|line| !line.is_empty())
+            .unwrap_or("")
+            .trim_matches(|c| c == '`' || c == '"' || c == ''')
+            .trim()
+            .to_string();
+        let now_s = now_ms() / 1000;
+        if let Err(err) = deadband_core::query::parse(&cleaned, now_s) {
+            return Err(format!(
+                "The model answered '{cleaned}', which isn't a valid query ({err}). Try rephrasing, or write the query directly."
+            ));
+        }
+        Ok(TranslateDto { query: cleaned, model })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// One plant device for the UI's roster list.
 #[derive(Debug, Serialize)]
 struct DeviceDto {
@@ -842,6 +947,8 @@ pub fn run() {
             replay_status,
             rules_status,
             run_scenario,
+            query_events,
+            translate_query,
             anomaly_status,
             analyst_status,
             explain_latest_alert,
