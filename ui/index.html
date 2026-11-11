@@ -160,8 +160,8 @@
 
         <nmui-card outlined class="span-all" data-widget="heart">
           <h2 class="card-title">Heartbeats — device rhythm</h2>
-          <div id="heart-body"><p class="dim">Each device's traffic rhythm as a waveform.
-          Steady = healthy polling. Bunched, frantic, or flat = look closer.</p></div>
+          <div id="heart-body"><p class="dim">Each device's traffic rhythm as a waveform — the last
+          6 minutes in 15-second slices. Steady = healthy polling. Bunched, frantic, or flat = look closer.</p></div>
           <div id="heart-readout" class="heart-readout" aria-live="polite">Hover any point on a heartbeat to compare that time slice across every device.</div>
         </nmui-card>
       </section>
@@ -360,7 +360,7 @@
         </nmui-card>
       </section>
 
-      <footer class="note">UI: nmui v0.43.3, vendored and pinned (ui/vendor/nmui) · Themes selectable in Settings</footer>
+      <footer class="note">UI: nmui v0.43.5, vendored and pinned (ui/vendor/nmui) · Themes selectable in Settings</footer>
     </main>
   </div>
 
@@ -721,20 +721,23 @@
     body.querySelectorAll('.heart-row').forEach((row) => {
       const hb = row._hb;
       if (!hb) return;
-      const x = ((bin + 0.5) / hb.bins.length * hb.width).toFixed(1);
-      const y = (26 - hb.bins[bin] / hb.max * 22).toFixed(1);
+      // The marker and the dashed line are plain HTML over the chart,
+      // positioned in % — so the marker is a true circle at any
+      // aspect ratio (an SVG circle inside the stretched viewBox
+      // rendered as a tall oval) and the line is exactly vertical.
+      const leftPct = ((bin + 0.5) / hb.bins.length * 100).toFixed(2) + '%';
+      const topPct = ((26 - hb.bins[bin] / hb.max * 22) / 30 * 100).toFixed(2) + '%';
       const value = row.querySelector('.heart-value');
       if (value) value.textContent = heartBinDetail(hb, bin);
-      const marker = row.querySelector('.heart-marker');
+      const marker = row.querySelector('.heart-marker-html');
       if (marker) {
-        marker.setAttribute('cx', x);
-        marker.setAttribute('cy', y);
+        marker.style.left = leftPct;
+        marker.style.top = topPct;
         marker.style.display = '';
       }
-      const vline = row.querySelector('.heart-vline');
+      const vline = row.querySelector('.heart-vline-html');
       if (vline) {
-        vline.setAttribute('x1', x);
-        vline.setAttribute('x2', x);
+        vline.style.left = leftPct;
         vline.style.display = '';
       }
       if (readoutText === null) readoutText = hb.deviceName + ' \u2014 ' + heartBinDetail(hb, bin) + '.';
@@ -756,9 +759,9 @@
       if (!hb) return;
       const value = row.querySelector('.heart-value');
       if (value) value.textContent = hb.defaultValue;
-      const marker = row.querySelector('.heart-marker');
+      const marker = row.querySelector('.heart-marker-html');
       if (marker) marker.style.display = 'none';
-      const vline = row.querySelector('.heart-vline');
+      const vline = row.querySelector('.heart-vline-html');
       if (vline) vline.style.display = 'none';
     });
     const readout = document.getElementById('heart-readout');
@@ -777,17 +780,29 @@
   // (short centered lines, img 3) and every re-measure shifts the
   // line sideways (imgs 1 vs 2). Fixed coordinates can't move.
   const HEART_VIEW_W = 1000;
+  // The time axis is FIXED, not fitted to whatever the last 500
+  // events happen to cover: 24 slices of 15s = the last 6 minutes,
+  // with slice edges aligned to 15s wall-clock boundaries. The old
+  // code re-sliced the event-count window every refresh, so the time
+  // scale breathed and the right edge ("now") jittered sideways.
+  // Aligned edges move only in whole slices, and the right side
+  // stays put for 15s at a time instead of sliding every refresh.
+  const HEART_BINS = 24;
+  const HEART_SLICE_MS = 15000;
+  const HEART_WINDOW_MS = HEART_BINS * HEART_SLICE_MS;
   // Build one heartbeat row (once). Rows are NEVER rebuilt on
   // refresh — renderHearts only updates them in place. The old code
   // did body.innerHTML = '' every 5s, which destroyed the SVG under
   // the pointer mid-hover and made the page jump to the top.
   function buildHeartRow(d) {
-    const BINS = 24;
+    const BINS = HEART_BINS;
     const row = document.createElement('div');
     row.className = 'heart-row';
     row.dataset.ip = d.ip;
     const name = document.createElement('span');
     name.className = 'heart-name';
+    const chart = document.createElement('div');
+    chart.className = 'heart-chart';
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('class', 'heart-svg');
     svg.setAttribute('viewBox', '0 0 ' + HEART_VIEW_W + ' 30');
@@ -796,22 +811,18 @@
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
     line.setAttribute('vector-effect', 'non-scaling-stroke');
     svg.appendChild(line);
-    const vline = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    vline.setAttribute('class', 'heart-vline');
-    vline.setAttribute('vector-effect', 'non-scaling-stroke');
-    vline.setAttribute('y1', '0');
-    vline.setAttribute('y2', '30');
+    chart.appendChild(svg);
+    const vline = document.createElement('div');
+    vline.className = 'heart-vline-html';
     vline.style.display = 'none';
-    svg.appendChild(vline);
-    const marker = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    marker.setAttribute('class', 'heart-marker');
-    marker.setAttribute('vector-effect', 'non-scaling-stroke');
-    marker.setAttribute('r', '3.6');
+    chart.appendChild(vline);
+    const marker = document.createElement('div');
+    marker.className = 'heart-marker-html';
     marker.style.display = 'none';
-    svg.appendChild(marker);
+    chart.appendChild(marker);
     const value = document.createElement('span');
     value.className = 'heart-value';
-    row.append(name, svg, value);
+    row.append(name, chart, value);
     for (let i = 0; i < BINS; i++) {
       const hit = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
       hit.setAttribute('y', '0');
@@ -835,8 +846,8 @@
     const W = HEART_VIEW_W;
     const name = row.querySelector('.heart-name');
     if (name) name.textContent = hb.deviceName + (hb.wrote ? ' \u00b7 wrote' : '');
+    row.classList.toggle('heart-wrote', !!hb.wrote);
     const svg = row.querySelector('.heart-svg');
-    svg.classList.toggle('heart-wrote', !!hb.wrote);
     svg.setAttribute('aria-label', hb.deviceName + ' heartbeat: ' + hb.defaultValue + '.');
     const line = svg.querySelector('polyline');
     line.setAttribute('points', hb.bins.map((v, i) =>
@@ -863,10 +874,12 @@
       body.dataset.hoverWired = '1';
       body.addEventListener('mouseleave', clearHeartHover);
     }
+    const BINS = HEART_BINS, slice = HEART_SLICE_MS;
     const tMax = Math.max(...recent.map((e) => e.timestamp));
-    const tMin = Math.min(...recent.map((e) => e.timestamp));
-    const BINS = 24, span = Math.max(tMax - tMin, 1);
-    const slice = span / BINS;
+    // Window end snaps to the next 15s boundary, so the right edge
+    // only advances in whole slices.
+    const tEnd = Math.ceil(tMax / slice) * slice;
+    const tMin = tEnd - HEART_WINDOW_MS;
     const seen = new Set();
     snap.devices.forEach((d) => {
       const bins = new Array(BINS).fill(0);
@@ -874,28 +887,35 @@
       let wrote = false;
       recent.forEach((e) => {
         if (e.src_ip === d.ip || e.dst_ip === d.ip) {
-          const idx = Math.min(BINS - 1, Math.floor((e.timestamp - (tMax - span)) / span * BINS));
-          if (idx >= 0) {
+          const idx = Math.floor((e.timestamp - tMin) / slice);
+          if (idx >= 0 && idx < BINS) {
             bins[idx] += 1;
             if (e.kind === 'write' && e.src_ip === d.ip) writeBins[idx] += 1;
           }
           if (e.kind === 'write' && e.src_ip === d.ip) wrote = true;
         }
       });
-      const max = Math.max(...bins, 1);
+      const windowMax = Math.max(...bins, 1);
       const total = bins.reduce((sum, v) => sum + v, 0);
       const totalWrites = writeBins.reduce((sum, v) => sum + v, 0);
       const deviceName = d.label || d.ip;
-      const defaultValue = total + (total === 1 ? ' event' : ' events') +
-        ' \u00b7 ' + totalWrites + (totalWrites === 1 ? ' write' : ' writes') +
-        ' \u00b7 peak ' + max + ' per slice';
       seen.add(d.ip);
       let row = body.querySelector('.heart-row[data-ip="' + d.ip + '"]');
       if (!row) {
         row = buildHeartRow(d);
         body.appendChild(row);
       }
-      row._hb = { bins, writeBins, max, wrote, deviceName, defaultValue, tMin, slice, width: HEART_VIEW_W };
+      // Y-scale peak decays slowly instead of snapping to this
+      // window's max every refresh: a burst in the newest slice used
+      // to flatten the whole line, then the line jumped back up when
+      // the burst slid out. The scale now eases down (~8% per
+      // refresh) so the right side stops bouncing vertically.
+      const scaleMax = Math.max(windowMax, (row._peak || 0) * 0.92);
+      row._peak = scaleMax;
+      const defaultValue = total + (total === 1 ? ' event' : ' events') +
+        ' \u00b7 ' + totalWrites + (totalWrites === 1 ? ' write' : ' writes') +
+        ' \u00b7 peak ' + scaleMax + ' per slice';
+      row._hb = { bins, writeBins, max: scaleMax, wrote, deviceName, defaultValue, tMin, slice, width: HEART_VIEW_W };
       updateHeartRow(row, row._hb);
     });
     body.querySelectorAll('.heart-row').forEach((row) => {

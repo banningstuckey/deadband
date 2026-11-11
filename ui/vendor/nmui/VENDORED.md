@@ -26,11 +26,14 @@ an app-side adaptation for the desktop webview, not an nmui change.
   v0.43.1, then v0.43.3 the same day): against the v0.40.0 pin the
   shell components diffed byte-identical at v0.43.0, so that bump
   only added menu + text-field for the Settings exposed-dropdown
-  fields; v0.43.1 brought the navigation rail-group legibility fix
-  and v0.43.3 the collapsed-rail hover-expand + group-parent tiles
-  (Play Console pattern). Deadband's rail is expanded and has no
-  groups, so both navigation changes are behavior-neutral here —
-  the pin stays current because Banning tracks nmui closely.
+  fields; v0.43.1 brought the navigation rail-group legibility fix;
+  v0.43.3 added collapsed-rail hover-expand + group-parent tiles
+  (Play Console pattern), v0.43.4 REVERTED the hover-expand (groups
+  open by click only — the screenshots were only about grouping),
+  and v0.43.5 wraps an open group in one tinted container in the
+  expanded rail. Deadband's rail is expanded and has no groups, so
+  all four navigation changes are behavior-neutral here — the pin
+  stays current because Banning tracks nmui closely.
 - **Scope:** shell and standard controls only. The Purdue map, risk
   timeline, and other data visualisations are custom SVG/canvas and
   never nmui.

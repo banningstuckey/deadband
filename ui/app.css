@@ -372,13 +372,27 @@ select.text-input { max-width: 240px; }
 .frame-arrow { align-self: center; color: var(--md-sys-color-on-surface-variant); }
 .heart-row { display: flex; align-items: center; gap: 14px; padding: 3px 0; flex-wrap: nowrap; }
 .heart-name { min-width: 150px; flex: 0 0 auto; font-size: 12.5px; }
-.heart-svg { flex: 1 1 auto; min-width: 0; height: 30px; }
-.heart-vline { stroke: var(--md-sys-color-on-surface-variant); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0.7; pointer-events: none; }
+.heart-chart { position: relative; flex: 1 1 auto; min-width: 0; }
+.heart-svg { width: 100%; height: 30px; display: block; }
+/* Crosshair overlays are plain HTML, not SVG: the marker is a true
+   circle at any aspect ratio (an SVG circle inside the stretched
+   viewBox rendered as a tall oval) and the line is exactly vertical. */
+.heart-vline-html {
+  position: absolute; top: 0; bottom: 0; width: 0;
+  border-left: 1px dashed var(--md-sys-color-on-surface-variant);
+  opacity: 0.7; pointer-events: none;
+}
+.heart-marker-html {
+  position: absolute; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%; box-sizing: border-box;
+  background: var(--md-sys-color-surface);
+  border: 2px solid var(--md-sys-color-primary);
+  pointer-events: none;
+}
 .heart-svg polyline { fill: none; stroke: var(--md-sys-color-primary); stroke-width: 1.6; pointer-events: none; }
 .heart-wrote polyline { stroke: var(--md-sys-color-tertiary); }
 .heart-hit { fill: transparent; pointer-events: all; cursor: crosshair; }
-.heart-marker { fill: var(--md-sys-color-surface); stroke: var(--md-sys-color-primary); stroke-width: 2; pointer-events: none; }
-.heart-wrote .heart-marker { stroke: var(--md-sys-color-tertiary); }
+.heart-wrote .heart-marker-html { border-color: var(--md-sys-color-tertiary); }
 .heart-value {
   min-width: 0; flex: 0 0 auto; white-space: nowrap; font-size: 12.5px;
   color: var(--md-sys-color-on-surface-variant);

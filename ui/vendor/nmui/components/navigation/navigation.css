@@ -273,6 +273,39 @@ nmui-navigation[rail][expanded] > destinations section[open] {
   border-inline-start: 1px solid var(--md-sys-color-outline-variant, #cac4d0);
 }
 
+/* An open group is ONE tinted container — the Play Console
+   pattern: the parent and its section share a single rounded
+   surface-container-high block, and the children are surface
+   pills inside it, inset from the container's edge. The block
+   replaces the guide rule and indent above: the container
+   itself says "these belong to the parent above". The
+   section's -6px top margin closes the destinations gap so
+   parent and section read as one block; its 12px top padding
+   keeps the first pill clear of the parent's bottom edge.
+   The parent's ::before takes the container's top radius so
+   its hover tint doesn't round off inside the square bottom. */
+nmui-navigation[rail][expanded] > destinations :is(a, button):has(+ section[open]) {
+  background-color: var(--md-sys-color-surface-container-high, #e6e0e9);
+  border-radius: var(--md-sys-shape-corner-extra-large, 28px) var(--md-sys-shape-corner-extra-large, 28px) 0 0;
+}
+
+nmui-navigation[rail][expanded] > destinations :is(a, button):has(+ section[open])::before {
+  border-radius: var(--md-sys-shape-corner-extra-large, 28px) var(--md-sys-shape-corner-extra-large, 28px) 0 0;
+}
+
+nmui-navigation[rail][expanded] > destinations section[open] {
+  margin-top: -6px;
+  padding: 12px 16px 16px;
+  gap: 4px;
+  background-color: var(--md-sys-color-surface-container-high, #e6e0e9);
+  border-radius: 0 0 var(--md-sys-shape-corner-extra-large, 28px) var(--md-sys-shape-corner-extra-large, 28px);
+  border-inline-start: none;
+}
+
+nmui-navigation[rail][expanded] > destinations section[open] :is(a, button) {
+  background-color: var(--md-sys-color-surface, #fef7ff);
+}
+
 /* While a group is sliding (height animating in the component),
    its content is clipped to the box — without this, the rows
    paint past the shrinking bottom edge and overlap the
