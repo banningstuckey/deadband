@@ -333,12 +333,24 @@ nmui-navigation[rail][expanded] > destinations section[open] section[open] :is(a
   background-color: transparent;
 }
 
+/* An open nested group is ONE seamless block, not a pill
+   stacked on a block: the parent is the block's top half
+   (surface, 28dp top corners — the same shape as the
+   level-1 parent on its container) and its section the
+   bottom half. No pill on a block, no gap line between
+   them: the pinched corners where a pill's round bottom
+   met the block's square top, and the blue-line gap in
+   Play's Testing group, both come from treating the parent
+   as a separate pill. Closed, the parent is a plain pill
+   again — this shape only applies while its section is
+   open. */
 nmui-navigation[rail][expanded] > destinations section[open] :is(a, button):has(+ section[open]) {
-  border-radius: var(--md-sys-shape-corner-full, 999px) var(--md-sys-shape-corner-full, 999px) 0 0;
+  background-color: var(--md-sys-color-surface, #fef7ff);
+  border-radius: var(--md-sys-shape-corner-extra-large, 28px) var(--md-sys-shape-corner-extra-large, 28px) 0 0;
 }
 
 nmui-navigation[rail][expanded] > destinations section[open] :is(a, button):has(+ section[open])::before {
-  border-radius: var(--md-sys-shape-corner-full, 999px) var(--md-sys-shape-corner-full, 999px) 0 0;
+  border-radius: var(--md-sys-shape-corner-extra-large, 28px) var(--md-sys-shape-corner-extra-large, 28px) 0 0;
 }
 
 /* While a group is sliding (height animating in the component),

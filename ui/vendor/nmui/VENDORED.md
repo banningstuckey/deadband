@@ -33,9 +33,11 @@ an app-side adaptation for the desktop webview, not an nmui change.
   and v0.43.5 wraps an open group in one tinted container in the
   expanded rail; v0.43.6 widens the expanded rail to 360dp, hides
   the destinations scrollbar, and renders nested groups as plain
-  surface blocks. Deadband's rail is expanded and has no groups, so
-  all five navigation changes are behavior-neutral here — the pin
-  stays current because Banning tracks nmui closely.
+  surface blocks; v0.43.7 makes an open nested group one seamless
+  block (parent as the block's top half, no gap line). Deadband's
+  rail is expanded and has no groups, so all six navigation changes
+  are behavior-neutral here — the pin stays current because Banning
+  tracks nmui closely.
 - **Scope:** shell and standard controls only. The Purdue map, risk
   timeline, and other data visualisations are custom SVG/canvas and
   never nmui.

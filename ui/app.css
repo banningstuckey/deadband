@@ -255,7 +255,14 @@ select.text-input { max-width: 240px; }
 
 /* Purdue map */
 .map-scroll { overflow-x: auto; }
-#purdue-map { width: 100%; min-width: 700px; display: block; }
+#purdue-map { width: 100%; min-width: 700px; display: block; touch-action: none; cursor: grab; }
+#purdue-map.dragging { cursor: grabbing; }
+.map-zoom { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+#map-zoom-label { min-width: 3.5em; text-align: center; }
+/* Conduit labels (protocol + port) only appear once the map is zoomed
+   past 2x — at full view they would just clutter the bands. */
+#purdue-map .c-label { display: none; font-size: 10px; fill: var(--md-sys-color-on-surface-variant); pointer-events: none; }
+#purdue-map.zoomed .c-label { display: block; }
 #purdue-map .band { fill: var(--md-sys-color-surface-container-low); }
 #purdue-map .band-dmz {
   fill: color-mix(in srgb, var(--md-sys-color-tertiary) 7%, var(--md-sys-color-surface-container-low));
