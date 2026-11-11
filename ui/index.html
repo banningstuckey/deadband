@@ -9,11 +9,16 @@
 <link rel="stylesheet" href="./vendor/nmui/css/motion.css">
 <link rel="stylesheet" href="./vendor/nmui/css/base.css">
 <link rel="stylesheet" href="./vendor/nmui/css/themes/deadband-industrial.css">
+<link rel="stylesheet" href="./themes/midnight-steel.css">
+<link rel="stylesheet" href="./themes/console-green.css">
+<link rel="stylesheet" href="./themes/ember-dark.css">
+<script>try { document.documentElement.setAttribute('theme', localStorage.getItem('deadband.theme') || 'deadband-industrial'); } catch (e) {}</script>
 <link rel="stylesheet" href="./vendor/nmui/components/navigation/navigation.css">
 <link rel="stylesheet" href="./vendor/nmui/components/button/button.css">
 <link rel="stylesheet" href="./vendor/nmui/components/card/card.css">
 <link rel="stylesheet" href="./vendor/nmui/components/badge/badge.css">
 <link rel="stylesheet" href="./vendor/nmui/components/divider/divider.css">
+<link rel="stylesheet" href="./vendor/nmui/components/tabs/tabs.css">
 <link rel="stylesheet" href="./app.css">
 <script type="module">
   import "./vendor/nmui/components/navigation/navigation.js";
@@ -21,6 +26,7 @@
   import "./vendor/nmui/components/card/card.js";
   import "./vendor/nmui/components/badge/badge.js";
   import "./vendor/nmui/components/divider/divider.js";
+  import "./vendor/nmui/components/tabs/tabs.js";
 </script>
 </head>
 <body>
@@ -53,15 +59,16 @@
 
       <section id="view-live" class="view">
         <div class="dash-bar span-all">
-          <div class="dash-tabs" id="dash-tabs"></div>
+          <nmui-tabs id="dash-tabs"></nmui-tabs>
           <button class="chip-btn" id="dash-new">+ New dashboard</button>
           <button class="chip-btn" id="dash-customize">Customize</button>
+          <button class="chip-btn" id="dash-cancel" hidden>Cancel</button>
           <span class="dim" id="dash-desc"></span>
         </div>
         <div class="dash-palette span-all" id="dash-palette" hidden>
           <span class="stat-label">Add widget:</span>
           <span id="dash-palette-chips"></span>
-          <span class="dim">Drag cards to reorder · × removes a card (it stays available here)</span>
+          <span class="dim">Hold the ⠿ grip and drag to reorder · Half/Full width resizes · × removes a card (it stays available here) · Save keeps it, Cancel undoes</span>
         </div>
         <nmui-card outlined class="overview-card" data-widget="overview">
           <div class="overview-grid">
@@ -275,6 +282,15 @@
         <nmui-card outlined>
           <h2 class="card-title">Preferences</h2>
           <div class="setting-row">
+            <label for="set-theme">Theme</label>
+            <select id="set-theme" class="text-input">
+              <option value="deadband-industrial">Industrial Dark — charcoal, steel blue, amber</option>
+              <option value="midnight-steel">Midnight Steel — deep navy, soft blue, rounder</option>
+              <option value="console-green">Console Green — terminal green on black</option>
+              <option value="ember-dark">Ember Dark — warm charcoal, ember and copper</option>
+            </select>
+          </div>
+          <div class="setting-row">
             <label for="set-launch-dash">Dashboard shown at launch</label>
             <select id="set-launch-dash" class="text-input"></select>
           </div>
@@ -311,7 +327,7 @@
         </nmui-card>
       </section>
 
-      <footer class="note">UI: nmui v0.40.0, vendored and pinned (ui/vendor/nmui) · Theme: Deadband Industrial, one theme file</footer>
+      <footer class="note">UI: nmui v0.40.0, vendored and pinned (ui/vendor/nmui) · Themes selectable in Settings</footer>
     </main>
   </div>
 
@@ -1160,6 +1176,7 @@
     story: 'Incident storyboard', traj: 'Trajectory', heart: 'Heartbeats',
   };
   const WIDGET_IDS = Object.keys(WIDGET_NAMES);
+  const FULL_BY_DEFAULT = ['overview', 'story', 'traj', 'heart'];
   const DASH_KEY = 'deadband.dashboards.v2';
   function defaultDashboards() {
     return [
@@ -1187,27 +1204,32 @@
     if (launchPref && dashboards.some((d) => d.id === launchPref)) activeDash = launchPref;
   } catch (err) {}
   let customizing = false;
+  let dashSnapshot = null;
   const currentDash = () => dashboards.find((d) => d.id === activeDash) || dashboards[0];
   const widgetEl = (id) => document.querySelector('#view-live [data-widget="' + id + '"]');
+  const widgetSize = (d, id) => (d.sizes && d.sizes[id]) || (FULL_BY_DEFAULT.includes(id) ? 'full' : 'half');
   function saveDashboards() {
     try { localStorage.setItem(DASH_KEY, JSON.stringify({ dashboards, activeDash })); } catch (err) {}
   }
+  const dashTabsEl = document.getElementById('dash-tabs');
+  let lastTabSig = '';
   function renderTabs() {
-    const wrap = document.getElementById('dash-tabs');
-    if (!wrap) return;
-    wrap.innerHTML = '';
+    if (!dashTabsEl) return;
+    const sig = dashboards.map((d) => d.id + ':' + d.name + ':' +
+      ((window._alertsTotal || 0) > (d.seen || 0) && d.id !== activeDash ? '!' : '')).join('|') +
+      '#' + activeDash + (customizing ? '#c' : '');
+    if (sig === lastTabSig) return;
+    lastTabSig = sig;
+    dashTabsEl.innerHTML = '';
     dashboards.forEach((d) => {
       const tab = document.createElement('button');
-      tab.className = 'dash-tab';
+      tab.setAttribute('value', d.id);
       if (d.id === activeDash) tab.setAttribute('selected', '');
-      const name = document.createElement('span');
-      name.textContent = d.name;
-      tab.appendChild(name);
+      tab.textContent = d.name;
       const unseen = (window._alertsTotal || 0) > (d.seen || 0);
       if (unseen && d.id !== activeDash) {
-        const badge = document.createElement('span');
-        badge.className = 'dash-badge';
-        badge.title = 'New alerts on this dashboard';
+        const badge = document.createElement('nmui-badge');
+        badge.setAttribute('aria-label', 'New alerts on this dashboard');
         tab.appendChild(badge);
       }
       if (customizing && dashboards.length > 1) {
@@ -1219,18 +1241,23 @@
           ev.stopPropagation();
           dashboards = dashboards.filter((x) => x.id !== d.id);
           if (activeDash === d.id) activeDash = dashboards[0].id;
-          saveDashboards(); applyDashboard();
+          applyDashboard(); refreshChrome();
         });
         tab.appendChild(del);
       }
-      tab.addEventListener('click', () => {
-        activeDash = d.id;
-        d.seen = window._alertsTotal || 0;
-        saveDashboards(); applyDashboard();
-      });
-      wrap.appendChild(tab);
+      dashTabsEl.appendChild(tab);
     });
   }
+  if (dashTabsEl) dashTabsEl.addEventListener('change', (e) => {
+    const id = e.detail && e.detail.value;
+    const d = dashboards.find((x) => x.id === id);
+    if (!d) return;
+    activeDash = d.id;
+    d.seen = window._alertsTotal || 0;
+    saveDashboards();
+    applyDashboard();
+    if (customizing) refreshChrome();
+  });
   function renderPalette() {
     const chips = document.getElementById('dash-palette-chips');
     if (!chips) return;
@@ -1242,7 +1269,7 @@
       chip.textContent = '+ ' + WIDGET_NAMES[id];
       chip.addEventListener('click', () => {
         d.widgets.push(id);
-        saveDashboards(); applyDashboard();
+        applyDashboard(); refreshChrome();
       });
       chips.appendChild(chip);
     });
@@ -1257,7 +1284,7 @@
       const idx = d.widgets.indexOf(id);
       el.style.display = idx >= 0 ? '' : 'none';
       el.style.order = idx >= 0 ? String(idx + 2) : '99';
-      el.classList.toggle('span-all', idx >= 0 && (id === 'story' || id === 'traj' || id === 'heart' || id === 'overview'));
+      el.style.gridColumn = idx >= 0 && widgetSize(d, id) === 'full' ? '1 / -1' : '';
     });
     renderTabs();
     renderPalette();
@@ -1268,74 +1295,121 @@
     if (d) d.seen = total;
     renderTabs();
   };
+  // Customize chrome: grip (pointer drag), size toggle, remove — rebuilt
+  // for whatever widgets the active dashboard currently holds.
+  function refreshChrome() {
+    const d = currentDash();
+    WIDGET_IDS.forEach((id) => {
+      const el = widgetEl(id);
+      if (!el) return;
+      const onBoard = d.widgets.includes(id);
+      el.classList.toggle('customizing', customizing && onBoard);
+      let tools = el.querySelector(':scope > .widget-tools');
+      if (customizing && onBoard) {
+        if (!tools) {
+          tools = document.createElement('div');
+          tools.className = 'widget-tools';
+          const grip = document.createElement('span');
+          grip.className = 'widget-grip';
+          grip.textContent = '⠿';
+          grip.title = 'Drag to move';
+          grip.addEventListener('pointerdown', (e) => startWidgetDrag(e, el, id));
+          const size = document.createElement('button');
+          size.className = 'chip-btn';
+          size.setAttribute('data-size-for', id);
+          size.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            const dd = currentDash();
+            if (!dd.sizes) dd.sizes = {};
+            dd.sizes[id] = widgetSize(dd, id) === 'full' ? 'half' : 'full';
+            applyDashboard(); refreshChrome();
+          });
+          const x = document.createElement('button');
+          x.className = 'chip-btn';
+          x.textContent = '×';
+          x.title = 'Remove from this dashboard';
+          x.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            const dd = currentDash();
+            dd.widgets = dd.widgets.filter((w) => w !== id);
+            applyDashboard(); refreshChrome();
+          });
+          tools.append(grip, size, x);
+          el.appendChild(tools);
+        }
+        const sizeBtn = tools.querySelector('[data-size-for]');
+        if (sizeBtn) sizeBtn.textContent = widgetSize(d, id) === 'full' ? 'Full width' : 'Half width';
+      } else if (tools) {
+        tools.remove();
+      }
+    });
+  }
+  // Pointer-based drag (HTML5 drag-and-drop is unreliable in WKWebView):
+  // hold the grip, move over another card, the board reorders live.
+  function startWidgetDrag(e, card, id) {
+    if (!customizing) return;
+    e.preventDefault();
+    card.classList.add('dragging');
+    const move = (ev) => {
+      const hit = document.elementFromPoint(ev.clientX, ev.clientY);
+      const target = hit && hit.closest ? hit.closest('#view-live [data-widget]') : null;
+      if (!target || target === card) return;
+      const targetId = target.getAttribute('data-widget');
+      const d = currentDash();
+      const from = d.widgets.indexOf(id);
+      const to = d.widgets.indexOf(targetId);
+      if (from < 0 || to < 0 || from === to) return;
+      d.widgets.splice(from, 1);
+      d.widgets.splice(to, 0, id);
+      applyDashboard(); refreshChrome();
+      card.classList.add('dragging');
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      card.classList.remove('dragging');
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
   const dashNew = document.getElementById('dash-new');
   if (dashNew) dashNew.addEventListener('click', () => {
     const d = { id: 'd' + Date.now(), name: 'Dashboard ' + (dashboards.length + 1),
       widgets: ['overview', 'map'], seen: window._alertsTotal || 0 };
     dashboards.push(d);
     activeDash = d.id;
-    saveDashboards(); applyDashboard();
+    if (!customizing) saveDashboards();
+    applyDashboard(); refreshChrome();
   });
   const dashCust = document.getElementById('dash-customize');
+  const dashCancel = document.getElementById('dash-cancel');
   function setCustomizing(on) {
     customizing = on;
-    if (dashCust) dashCust.toggleAttribute('selected', on);
+    if (dashCust) dashCust.textContent = on ? 'Save' : 'Customize';
+    if (dashCancel) dashCancel.hidden = !on;
     const palette = document.getElementById('dash-palette');
     if (palette) palette.hidden = !on;
-    const d = currentDash();
-    d.widgets.forEach((id) => {
-      const el = widgetEl(id);
-      if (!el) return;
-      el.draggable = on;
-      el.classList.toggle('customizing', on);
-      let tools = el.querySelector('.widget-tools');
-      if (on && !tools) {
-        tools = document.createElement('div');
-        tools.className = 'widget-tools';
-        const grip = document.createElement('span');
-        grip.textContent = '⠿ drag';
-        const x = document.createElement('button');
-        x.className = 'chip-btn';
-        x.textContent = '×';
-        x.title = 'Remove from this dashboard';
-        x.addEventListener('click', (ev) => {
-          ev.stopPropagation();
-          d.widgets = d.widgets.filter((w) => w !== id);
-          saveDashboards(); applyDashboard(); setCustomizing(true);
-        });
-        tools.append(grip, x);
-        el.appendChild(tools);
-      } else if (!on && tools) {
-        tools.remove();
-      }
-    });
+    refreshChrome();
     renderTabs();
   }
-  if (dashCust) dashCust.addEventListener('click', () => setCustomizing(!customizing));
-  // Drag to reorder within the active dashboard.
-  let dragId = null;
-  document.querySelectorAll('#view-live [data-widget]').forEach((el) => {
-    el.addEventListener('dragstart', (e) => {
-      if (!customizing) return;
-      dragId = el.getAttribute('data-widget');
-      el.classList.add('dragging');
-      try { e.dataTransfer.setData('text/plain', dragId); } catch (err) {}
-    });
-    el.addEventListener('dragend', () => el.classList.remove('dragging'));
-    el.addEventListener('dragover', (e) => { if (customizing && dragId) e.preventDefault(); });
-    el.addEventListener('drop', (e) => {
-      if (!customizing || !dragId) return;
-      e.preventDefault();
-      const targetId = el.getAttribute('data-widget');
-      const d = currentDash();
-      const from = d.widgets.indexOf(dragId);
-      const to = d.widgets.indexOf(targetId);
-      if (from < 0 || to < 0 || from === to) return;
-      d.widgets.splice(from, 1);
-      d.widgets.splice(to, 0, dragId);
-      dragId = null;
-      saveDashboards(); applyDashboard(); setCustomizing(true);
-    });
+  if (dashCust) dashCust.addEventListener('click', () => {
+    if (!customizing) {
+      dashSnapshot = JSON.stringify(dashboards);
+      setCustomizing(true);
+    } else {
+      saveDashboards();
+      dashSnapshot = null;
+      setCustomizing(false);
+    }
+  });
+  if (dashCancel) dashCancel.addEventListener('click', () => {
+    if (dashSnapshot) {
+      dashboards = JSON.parse(dashSnapshot);
+      if (!dashboards.some((d) => d.id === activeDash)) activeDash = dashboards[0].id;
+      dashSnapshot = null;
+    }
+    setCustomizing(false);
+    applyDashboard();
   });
   applyDashboard();
 
@@ -1357,6 +1431,14 @@
   if (setLaunch) setLaunch.addEventListener('change', () => {
     try { localStorage.setItem('deadband.launchDash', setLaunch.value); } catch (err) {}
   });
+  const setTheme = document.getElementById('set-theme');
+  if (setTheme) {
+    setTheme.value = document.documentElement.getAttribute('theme') || 'deadband-industrial';
+    setTheme.addEventListener('change', () => {
+      document.documentElement.setAttribute('theme', setTheme.value);
+      try { localStorage.setItem('deadband.theme', setTheme.value); } catch (err) {}
+    });
+  }
   const setLogFilter = document.getElementById('set-log-filter');
   if (setLogFilter) {
     try { setLogFilter.value = localStorage.getItem('deadband.logFilter') || 'important'; } catch (err) {}

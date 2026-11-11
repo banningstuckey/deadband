@@ -1,0 +1,47 @@
+/* Console Green — an app-local Deadband theme (not part of the vendored nmui pin).
+   Terminal green on near-black — the old-school NOC wall look. Error stays red.
+   Selected via <html theme="console-green"> from Settings. */
+
+:root[theme="console-green"] {
+  --md-sys-color-primary: #4ade80;
+  --md-sys-color-on-primary: #052e16;
+  --md-sys-color-primary-container: #14532d;
+  --md-sys-color-on-primary-container: #dcfce7;
+  --md-sys-color-secondary: #86a893;
+  --md-sys-color-on-secondary: #0a1f12;
+  --md-sys-color-secondary-container: #14291b;
+  --md-sys-color-on-secondary-container: #d7e8dc;
+  --md-sys-color-tertiary: #fbbf24;
+  --md-sys-color-on-tertiary: #451a03;
+  --md-sys-color-tertiary-container: #713f12;
+  --md-sys-color-on-tertiary-container: #fef3c7;
+  --md-sys-color-error: #f87171;
+  --md-sys-color-on-error: #450a0a;
+  --md-sys-color-error-container: #7f1d1d;
+  --md-sys-color-on-error-container: #fecaca;
+  --md-sys-color-surface: #06110b;
+  --md-sys-color-on-surface: #e7f5ec;
+  --md-sys-color-surface-variant: #0e2016;
+  --md-sys-color-on-surface-variant: #c4dccd;
+  --md-sys-color-surface-container-lowest: #030805;
+  --md-sys-color-surface-container-low: #08170e;
+  --md-sys-color-surface-container: #0a1c11;
+  --md-sys-color-surface-container-high: #10271a;
+  --md-sys-color-surface-container-highest: #183624;
+  --md-sys-color-inverse-surface: #dcefe2;
+  --md-sys-color-inverse-on-surface: #06110b;
+  --md-sys-color-inverse-primary: #22c55e;
+  --md-sys-color-outline: #40614c;
+  --md-sys-color-outline-variant: #1d3325;
+  --md-sys-color-background: #06110b;
+  --md-sys-color-on-background: #e7f5ec;
+  --md-sys-color-shadow: #000000;
+  --md-sys-color-scrim: #000000;
+  --md-sys-shape-corner-none: 0;
+  --md-sys-shape-corner-extra-small: 0px;
+  --md-sys-shape-corner-small: 2px;
+  --md-sys-shape-corner-medium: 4px;
+  --md-sys-shape-corner-large: 6px;
+  --md-sys-shape-corner-extra-large: 8px;
+  --md-sys-shape-corner-full: 999px;
+}

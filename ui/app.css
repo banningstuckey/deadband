@@ -351,3 +351,9 @@ select.text-input { max-width: 240px; }
 .setting-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 7px 0; }
 .setting-row label { font-size: 14px; }
 .setting-row .text-input { min-width: 230px; }
+
+/* Dashboard tabs + widget chrome */
+#dash-tabs { flex: 1 1 auto; min-width: 220px; }
+.widget-grip { cursor: grab; touch-action: none; padding: 2px 6px; font-size: 15px; color: var(--md-sys-color-on-surface-variant); }
+.widget-grip:active { cursor: grabbing; }
+#view-live nmui-card.dragging { opacity: 0.5; outline: 2px solid var(--md-sys-color-primary); outline-offset: -2px; }

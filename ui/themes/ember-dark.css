@@ -1,0 +1,47 @@
+/* Ember Dark — an app-local Deadband theme (not part of the vendored nmui pin).
+   Warm charcoal with ember-orange and copper — the colors of the Deadband mark.
+   Selected via <html theme="ember-dark"> from Settings. */
+
+:root[theme="ember-dark"] {
+  --md-sys-color-primary: #fb923c;
+  --md-sys-color-on-primary: #431407;
+  --md-sys-color-primary-container: #7c2d12;
+  --md-sys-color-on-primary-container: #ffedd5;
+  --md-sys-color-secondary: #d6a05a;
+  --md-sys-color-on-secondary: #2a1a05;
+  --md-sys-color-secondary-container: #33241a;
+  --md-sys-color-on-secondary-container: #f5e3c8;
+  --md-sys-color-tertiary: #facc15;
+  --md-sys-color-on-tertiary: #422006;
+  --md-sys-color-tertiary-container: #713f12;
+  --md-sys-color-on-tertiary-container: #fef9c3;
+  --md-sys-color-error: #f87171;
+  --md-sys-color-on-error: #450a0a;
+  --md-sys-color-error-container: #7f1d1d;
+  --md-sys-color-on-error-container: #fecaca;
+  --md-sys-color-surface: #140f0c;
+  --md-sys-color-on-surface: #f7efe8;
+  --md-sys-color-surface-variant: #241a14;
+  --md-sys-color-on-surface-variant: #e3d5c8;
+  --md-sys-color-surface-container-lowest: #0a0705;
+  --md-sys-color-surface-container-low: #1a130e;
+  --md-sys-color-surface-container: #1d1611;
+  --md-sys-color-surface-container-high: #2a1f18;
+  --md-sys-color-surface-container-highest: #392b20;
+  --md-sys-color-inverse-surface: #f0e4d8;
+  --md-sys-color-inverse-on-surface: #140f0c;
+  --md-sys-color-inverse-primary: #ea580c;
+  --md-sys-color-outline: #7a6552;
+  --md-sys-color-outline-variant: #3a2c20;
+  --md-sys-color-background: #140f0c;
+  --md-sys-color-on-background: #f7efe8;
+  --md-sys-color-shadow: #000000;
+  --md-sys-color-scrim: #000000;
+  --md-sys-shape-corner-none: 0;
+  --md-sys-shape-corner-extra-small: 2px;
+  --md-sys-shape-corner-small: 4px;
+  --md-sys-shape-corner-medium: 6px;
+  --md-sys-shape-corner-large: 8px;
+  --md-sys-shape-corner-extra-large: 12px;
+  --md-sys-shape-corner-full: 999px;
+}

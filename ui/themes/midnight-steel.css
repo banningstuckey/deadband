@@ -1,0 +1,47 @@
+/* Midnight Steel — an app-local Deadband theme (not part of the vendored nmui pin).
+   Deep navy surfaces, soft steel-blue primary, rounder corners — the calm night-shift board.
+   Selected via <html theme="midnight-steel"> from Settings. */
+
+:root[theme="midnight-steel"] {
+  --md-sys-color-primary: #93c5fd;
+  --md-sys-color-on-primary: #0b2447;
+  --md-sys-color-primary-container: #1e3a5f;
+  --md-sys-color-on-primary-container: #dbeafe;
+  --md-sys-color-secondary: #7d8aa0;
+  --md-sys-color-on-secondary: #0d1522;
+  --md-sys-color-secondary-container: #1c2739;
+  --md-sys-color-on-secondary-container: #dbe4f0;
+  --md-sys-color-tertiary: #fbbf24;
+  --md-sys-color-on-tertiary: #451a03;
+  --md-sys-color-tertiary-container: #713f12;
+  --md-sys-color-on-tertiary-container: #fef3c7;
+  --md-sys-color-error: #f87171;
+  --md-sys-color-on-error: #450a0a;
+  --md-sys-color-error-container: #7f1d1d;
+  --md-sys-color-on-error-container: #fecaca;
+  --md-sys-color-surface: #0a0f1c;
+  --md-sys-color-on-surface: #f3f4f6;
+  --md-sys-color-surface-variant: #16203a;
+  --md-sys-color-on-surface-variant: #d1d5db;
+  --md-sys-color-surface-container-lowest: #05080f;
+  --md-sys-color-surface-container-low: #0d1526;
+  --md-sys-color-surface-container: #111a2e;
+  --md-sys-color-surface-container-high: #1a2742;
+  --md-sys-color-surface-container-highest: #243354;
+  --md-sys-color-inverse-surface: #e2e8f0;
+  --md-sys-color-inverse-on-surface: #0a0f1c;
+  --md-sys-color-inverse-primary: #60a5fa;
+  --md-sys-color-outline: #5b6b87;
+  --md-sys-color-outline-variant: #26314d;
+  --md-sys-color-background: #0a0f1c;
+  --md-sys-color-on-background: #f3f4f6;
+  --md-sys-color-shadow: #000000;
+  --md-sys-color-scrim: #000000;
+  --md-sys-shape-corner-none: 0;
+  --md-sys-shape-corner-extra-small: 4px;
+  --md-sys-shape-corner-small: 8px;
+  --md-sys-shape-corner-medium: 12px;
+  --md-sys-shape-corner-large: 16px;
+  --md-sys-shape-corner-extra-large: 20px;
+  --md-sys-shape-corner-full: 999px;
+}

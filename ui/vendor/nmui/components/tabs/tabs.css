@@ -1,0 +1,166 @@
+/* nmui-tabs — M3 tabs.
+   Container: surface, 1dp outline-variant divider included
+   in the height. Label title-small. Primary: active icon +
+   label primary, indicator 3dp hugging the content.
+   Secondary: active label on-surface, indicator 2dp across
+   the whole tab. State tint = the tab's own color at
+   hover 8% / focus 12% / pressed 12% (the tokens' state
+   layer colors track the label color in both variants). */
+
+nmui-tabs {
+  display: flex;
+  position: relative;
+  background-color: var(--md-sys-color-surface, #fef7ff);
+  border-bottom: 1px solid var(--md-sys-color-outline-variant, #cac4d0);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+nmui-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+nmui-tabs > a,
+nmui-tabs > button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 0;
+  min-height: 48px;
+  padding: 0 16px;
+  box-sizing: border-box;
+  border: 0;
+  background: transparent;
+  font: var(--md-sys-typescale-title-small, 500 14px/20px "Roboto", sans-serif);
+  color: var(--md-sys-color-on-surface-variant, #49454f);
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Fixed tabs divide the row into equal sections; scrollable
+   tabs size to their labels. */
+nmui-tabs[scrollable] > a,
+nmui-tabs[scrollable] > button {
+  flex: 0 0 auto;
+}
+
+/* Icon + label stack (primary): the row grows to 64dp. */
+nmui-tabs[stacked] > a,
+nmui-tabs[stacked] > button {
+  min-height: 64px;
+}
+
+nmui-tabs > a > content,
+nmui-tabs > button > content {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  pointer-events: none;
+}
+
+/* Inline icon configuration: icon beside the label. */
+nmui-tabs > a[inline] > content,
+nmui-tabs > button[inline] > content {
+  flex-direction: row;
+  gap: 8px;
+}
+
+nmui-tabs > a > content > icon,
+nmui-tabs > button > content > icon {
+  font-size: 24px;
+  line-height: 1;
+}
+
+/* Label-only tabs keep the content in a row. */
+nmui-tabs:not([stacked]) > a > content,
+nmui-tabs:not([stacked]) > button > content {
+  flex-direction: row;
+}
+
+/* --- states -------------------------------------------------- */
+
+nmui-tabs > a:hover,
+nmui-tabs > button:hover {
+  background-color: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+nmui-tabs > a:active,
+nmui-tabs > button:active {
+  background-color: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+nmui-tabs > a:focus-visible,
+nmui-tabs > button:focus-visible {
+  outline: 2px solid var(--md-sys-color-primary, #6750a4);
+  outline-offset: -2px;
+  background-color: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+nmui-tabs > [selected] {
+  color: var(--md-sys-color-primary, #6750a4);
+}
+
+/* Secondary: the active label is on-surface, not primary. */
+nmui-tabs[secondary] > [selected] {
+  color: var(--md-sys-color-on-surface, #1d1b20);
+}
+
+nmui-tabs > [aria-disabled="true"] {
+  color: color-mix(in srgb, var(--md-sys-color-on-surface, #1d1b20) 38%, transparent);
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* --- badge ----------------------------------------------------- */
+
+nmui-tabs > a > nmui-badge,
+nmui-tabs > button > nmui-badge {
+  margin-inline-start: 4px;
+  pointer-events: none;
+}
+
+/* On a stacked tab the badge overlaps the icon (6dp). */
+nmui-tabs[stacked] > a > nmui-badge,
+nmui-tabs[stacked] > button > nmui-badge {
+  position: absolute;
+  top: 8px;
+  left: calc(50% + 3px);
+  margin: 0;
+}
+
+/* --- indicator --------------------------------------------------- */
+
+nmui-tabs > indicator {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  width: 0;
+  border-radius: 3px 3px 0 0;
+  background-color: var(--md-sys-color-primary, #6750a4);
+  transition:
+    transform var(--md-sys-motion-spring-medium-effects, 250ms cubic-bezier(0.2, 0, 0, 1)),
+    width var(--md-sys-motion-spring-medium-effects, 250ms cubic-bezier(0.2, 0, 0, 1));
+  pointer-events: none;
+}
+
+nmui-tabs[secondary] > indicator {
+  height: 2px;
+  border-radius: 0;
+}
+
+/* --- ripple ------------------------------------------------------- */
+
+nmui-tabs > a > ripple,
+nmui-tabs > button > ripple {
+  position: absolute;
+  border-radius: var(--md-sys-shape-corner-full, 999px);
+  background: currentColor;
+  pointer-events: none;
+}
