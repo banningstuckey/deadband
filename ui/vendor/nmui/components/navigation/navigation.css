@@ -30,7 +30,7 @@ nmui-navigation[rail][collapsed] {
 }
 
 nmui-navigation[rail][expanded] {
-  width: 280px;
+  width: 360px;
 }
 
 /* The header's contents (menu button, brand, FAB) have no geometry
@@ -48,7 +48,7 @@ nmui-navigation[rail][collapsed] > header {
 }
 
 nmui-navigation[rail][expanded] > header {
-  width: 280px;
+  width: 360px;
   box-sizing: border-box;
 }
 
@@ -82,6 +82,12 @@ nmui-navigation[rail] > destinations {
   flex: 1;
   margin-top: 20px;
   overflow-y: auto;
+  /* The list still scrolls — wheel, touch, keyboard — but
+     the bar itself is hidden: it reads as clutter against
+     the rail's edge. Firefox and WebKit need their own
+     spellings of "no bar". */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   transition:
     padding-inline-start var(--md-sys-motion-spring-medium-effects, 250ms cubic-bezier(0.2, 0, 0, 1)),
     padding-inline-end var(--md-sys-motion-spring-medium-effects, 250ms cubic-bezier(0.2, 0, 0, 1)),
@@ -91,6 +97,10 @@ nmui-navigation[rail] > destinations {
 /* With no header, the spec's top space stands in for it. */
 nmui-navigation[rail]:not(:has(> header)) > destinations {
   margin-top: 44px;
+}
+
+nmui-navigation[rail] > destinations::-webkit-scrollbar {
+  display: none;
 }
 
 nmui-navigation[rail][center] > destinations {
@@ -304,6 +314,31 @@ nmui-navigation[rail][expanded] > destinations section[open] {
 
 nmui-navigation[rail][expanded] > destinations section[open] :is(a, button) {
   background-color: var(--md-sys-color-surface, #fef7ff);
+}
+
+/* A group inside a group — the sub-selections. Pills inside
+   pills read as clutter, so a nested group's block takes the
+   child-pill color (surface) and its children are bare rows
+   on it: the white block with plain text rows from Play's
+   Testing group. The nested parent keeps its pill top and
+   squares off where it meets the block below, ::before
+   included. This holds at any depth: a third-level section
+   is a surface block whose rows simply continue the plain
+   list, indented deeper. */
+nmui-navigation[rail][expanded] > destinations section[open] section[open] {
+  background-color: var(--md-sys-color-surface, #fef7ff);
+}
+
+nmui-navigation[rail][expanded] > destinations section[open] section[open] :is(a, button) {
+  background-color: transparent;
+}
+
+nmui-navigation[rail][expanded] > destinations section[open] :is(a, button):has(+ section[open]) {
+  border-radius: var(--md-sys-shape-corner-full, 999px) var(--md-sys-shape-corner-full, 999px) 0 0;
+}
+
+nmui-navigation[rail][expanded] > destinations section[open] :is(a, button):has(+ section[open])::before {
+  border-radius: var(--md-sys-shape-corner-full, 999px) var(--md-sys-shape-corner-full, 999px) 0 0;
 }
 
 /* While a group is sliding (height animating in the component),

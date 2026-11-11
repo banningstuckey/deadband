@@ -371,7 +371,7 @@ select.text-input { max-width: 240px; }
 .frame-time { font-size: 11px; color: var(--md-sys-color-on-surface-variant); }
 .frame-arrow { align-self: center; color: var(--md-sys-color-on-surface-variant); }
 .heart-row { display: flex; align-items: center; gap: 14px; padding: 3px 0; flex-wrap: nowrap; }
-.heart-name { min-width: 150px; flex: 0 0 auto; font-size: 12.5px; }
+.heart-name { flex: 0 0 8.5em; min-width: 0; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .heart-chart { position: relative; flex: 1 1 auto; min-width: 0; }
 .heart-svg { width: 100%; height: 30px; display: block; }
 /* Crosshair overlays are plain HTML, not SVG: the marker is a true
@@ -394,7 +394,11 @@ select.text-input { max-width: 240px; }
 .heart-hit { fill: transparent; pointer-events: all; cursor: crosshair; }
 .heart-wrote .heart-marker-html { border-color: var(--md-sys-color-tertiary); }
 .heart-value {
-  min-width: 0; flex: 0 0 auto; white-space: nowrap; font-size: 12.5px;
+  /* Fixed width: the longest readout ("290 events · 0 writes ·
+     10:49:08–10:49:23") fits, so the text changing on hover can
+     never resize this column and shove the chart sideways. */
+  flex: 0 0 300px; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; font-size: 12.5px;
   color: var(--md-sys-color-on-surface-variant);
   font-variant-numeric: tabular-nums;
 }

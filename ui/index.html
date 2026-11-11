@@ -360,7 +360,7 @@
         </nmui-card>
       </section>
 
-      <footer class="note">UI: nmui v0.43.5, vendored and pinned (ui/vendor/nmui) · Themes selectable in Settings</footer>
+      <footer class="note">UI: nmui v0.43.6, vendored and pinned (ui/vendor/nmui) · Themes selectable in Settings</footer>
     </main>
   </div>
 
@@ -788,8 +788,12 @@
   // Aligned edges move only in whole slices, and the right side
   // stays put for 15s at a time instead of sliding every refresh.
   const HEART_BINS = 24;
-  const HEART_SLICE_MS = 15000;
-  const HEART_WINDOW_MS = HEART_BINS * HEART_SLICE_MS;
+  // SECONDS, not ms: event timestamps are seconds (engine.rs divides
+  // packet ms by 1000; fmtTime takes tsSeconds). The previous build
+  // used 15000/360000 as if they were ms — slices of 4h10m and a
+  // 100-hour window, so every event crammed into the last bin.
+  const HEART_SLICE_SEC = 15;
+  const HEART_WINDOW_SEC = HEART_BINS * HEART_SLICE_SEC;
   // Build one heartbeat row (once). Rows are NEVER rebuilt on
   // refresh — renderHearts only updates them in place. The old code
   // did body.innerHTML = '' every 5s, which destroyed the SVG under
@@ -874,12 +878,12 @@
       body.dataset.hoverWired = '1';
       body.addEventListener('mouseleave', clearHeartHover);
     }
-    const BINS = HEART_BINS, slice = HEART_SLICE_MS;
+    const BINS = HEART_BINS, slice = HEART_SLICE_SEC;
     const tMax = Math.max(...recent.map((e) => e.timestamp));
     // Window end snaps to the next 15s boundary, so the right edge
     // only advances in whole slices.
     const tEnd = Math.ceil(tMax / slice) * slice;
-    const tMin = tEnd - HEART_WINDOW_MS;
+    const tMin = tEnd - HEART_WINDOW_SEC;
     const seen = new Set();
     snap.devices.forEach((d) => {
       const bins = new Array(BINS).fill(0);
@@ -921,6 +925,23 @@
     body.querySelectorAll('.heart-row').forEach((row) => {
       if (!seen.has(row.dataset.ip)) row.remove();
     });
+    // Name column fits the widest name exactly (measured, not a
+    // fixed 150px that leaves dead space after short names). Every
+    // row gets the same width, so the charts stay aligned. Only
+    // applied when layout is measurable — on a hidden board the
+    // widths read 0 and the CSS default (8.5em) stands.
+    const rows = [...body.querySelectorAll('.heart-row')];
+    const widest = Math.max(0, ...rows.map((r) => {
+      const n = r.querySelector('.heart-name');
+      return n ? n.scrollWidth : 0;
+    }));
+    if (widest > 0) {
+      const fit = Math.min(200, Math.max(60, widest)) + 'px';
+      rows.forEach((r) => {
+        const n = r.querySelector('.heart-name');
+        if (n) n.style.flexBasis = fit;
+      });
+    }
     if (heartHoverBin !== null) applyHeartHover(heartHoverBin);
   }
 
