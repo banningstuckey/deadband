@@ -1015,14 +1015,19 @@
   async function loadOverview() {
     if (!invoke) return;
     try {
-      const [rules, anomaly, snap, recent] = await Promise.all([
+      const [rules, anomaly, snap, alerts] = await Promise.all([
         invoke('rules_status'), invoke('anomaly_status'),
-        invoke('network_snapshot'), invoke('recent_events', { limit: 100 }),
+        invoke('network_snapshot'),
+        invoke('query_events', { query: 'kind:alert', limit: 200 }),
       ]);
       window._alertsTotal = rules.alerts_total;
       if (window._dashTick) window._dashTick(rules.alerts_total);
-      const latestAlert = recent.find((e) => e.kind === 'alert');
-      updateAlertBell(recent);
+      // The bell, the latest-alert line and the storyboard fallback all
+      // read from here: alerts live in the store, and the last-100
+      // event window goes stale the moment routine traffic buries them.
+      const latestAlert = alerts[0] || null;
+      window._latestAlert = latestAlert;
+      updateAlertBell(alerts);
       const stateEl = document.getElementById('ov-state');
       const state = anomaly.risk_score >= 50 || rules.alerts_total > 0
         ? 'Needs attention' : anomaly.learning ? 'Learning' : 'Quiet';
@@ -1045,7 +1050,30 @@
   function renderStoryboard(recent) {
     const body = document.getElementById('story-body');
     const alert = recent.find((e) => e.kind === 'alert');
-    if (!alert) return;
+    if (!alert) {
+      // No alert in the live window, but the store may hold older
+      // ones — show the latest known alert rather than "No alerts yet".
+      const known = window._latestAlert;
+      if (!known) return;
+      body.innerHTML = '';
+      const strip = document.createElement('div');
+      strip.className = 'story-strip';
+      const card = document.createElement('div');
+      card.className = 'frame frame-alert';
+      const t = document.createElement('span');
+      t.className = 'frame-time';
+      t.textContent = fmtTime(known.timestamp);
+      const s = document.createElement('span');
+      s.textContent = known.summary;
+      card.append(t, s);
+      strip.appendChild(card);
+      body.appendChild(strip);
+      const note = document.createElement('p');
+      note.className = 'dim';
+      note.textContent = 'Older incident — its surrounding frames have aged out of the live window.';
+      body.appendChild(note);
+      return;
+    }
     const subject = alert.src_ip || alert.dst_ip;
     const frames = recent
       .filter((e) => (e.src_ip === subject || e.dst_ip === subject) &&
