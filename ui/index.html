@@ -740,7 +740,12 @@
       if (readoutText === null) readoutText = hb.deviceName + ' \u2014 ' + heartBinDetail(hb, bin) + '.';
     });
     const readout = document.getElementById('heart-readout');
-    if (readout && readoutText) readout.textContent = readoutText + ' Every row above shows its own numbers for that same slice.';
+    // Only write when the text changes: rewriting the live region on
+    // every slice crossing churns the browser while the user drags.
+    if (readout && readoutText) {
+      const text = readoutText + ' Every row above shows its own numbers for that same slice.';
+      if (readout.textContent !== text) readout.textContent = text;
+    }
   }
   function clearHeartHover() {
     heartHoverBin = null;
@@ -757,11 +762,87 @@
       if (vline) vline.style.display = 'none';
     });
     const readout = document.getElementById('heart-readout');
-    if (readout) readout.textContent = 'Hover any point on a heartbeat to compare that time slice across every device.';
+    if (readout) {
+      const text = 'Hover any point on a heartbeat to compare that time slice across every device.';
+      if (readout.textContent !== text) readout.textContent = text;
+    }
+  }
+  // Build one heartbeat row (once). Rows are NEVER rebuilt on
+  // refresh — renderHearts only updates them in place. The old code
+  // did body.innerHTML = '' every 5s, which destroyed the SVG under
+  // the pointer mid-hover and made the page jump to the top.
+  function buildHeartRow(d) {
+    const BINS = 24;
+    const row = document.createElement('div');
+    row.className = 'heart-row';
+    row.dataset.ip = d.ip;
+    const name = document.createElement('span');
+    name.className = 'heart-name';
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'heart-svg');
+    svg.setAttribute('role', 'img');
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    svg.appendChild(line);
+    const vline = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    vline.setAttribute('class', 'heart-vline');
+    vline.setAttribute('y1', '0');
+    vline.setAttribute('y2', '30');
+    vline.style.display = 'none';
+    svg.appendChild(vline);
+    const marker = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    marker.setAttribute('class', 'heart-marker');
+    marker.setAttribute('r', '3.6');
+    marker.style.display = 'none';
+    svg.appendChild(marker);
+    const value = document.createElement('span');
+    value.className = 'heart-value';
+    row.append(name, svg, value);
+    for (let i = 0; i < BINS; i++) {
+      const hit = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      hit.setAttribute('y', '0');
+      hit.setAttribute('height', '30');
+      hit.setAttribute('class', 'heart-hit');
+      const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+      hit.appendChild(title);
+      hit.addEventListener('pointerenter', () => {
+        heartHoverBin = i;
+        applyHeartHover(i);
+      });
+      svg.appendChild(hit);
+    }
+    return row;
+  }
+  // Refresh one row's numbers and geometry in place. The hit rects,
+  // marker and listeners stay put, so a hover (or drag) across the
+  // rows is never interrupted by the 5s refresh.
+  function updateHeartRow(row, hb, W) {
+    const BINS = hb.bins.length;
+    const name = row.querySelector('.heart-name');
+    if (name) name.textContent = hb.deviceName + (hb.wrote ? ' \u00b7 wrote' : '');
+    const svg = row.querySelector('.heart-svg');
+    svg.classList.toggle('heart-wrote', !!hb.wrote);
+    svg.setAttribute('viewBox', '0 0 ' + W + ' 30');
+    svg.setAttribute('aria-label', hb.deviceName + ' heartbeat: ' + hb.defaultValue + '.');
+    const line = svg.querySelector('polyline');
+    line.setAttribute('points', hb.bins.map((v, i) =>
+      ((i + 0.5) / BINS * W).toFixed(1) + ',' + (26 - v / hb.max * 22).toFixed(1)).join(' '));
+    const hits = svg.querySelectorAll('.heart-hit');
+    hits.forEach((hit, i) => {
+      const count = hb.bins[i];
+      const start = hb.tMin + i * hb.slice;
+      const end = start + hb.slice;
+      hit.setAttribute('x', (i / BINS * W).toFixed(1));
+      hit.setAttribute('width', (W / BINS).toFixed(1));
+      const title = hit.querySelector('title');
+      if (title) title.textContent = hb.deviceName + ': ' + count + (count === 1 ? ' event' : ' events') +
+        ', ' + hb.writeBins[i] + (hb.writeBins[i] === 1 ? ' write' : ' writes') +
+        ', ' + fmtTime(start) + '\u2013' + fmtTime(end);
+    });
+    const value = row.querySelector('.heart-value');
+    if (value && heartHoverBin === null) value.textContent = hb.defaultValue;
   }
   function renderHearts(recent, snap) {
     const body = document.getElementById('heart-body');
-    const readout = document.getElementById('heart-readout');
     if (!recent.length || !snap.devices.length) return;
     if (!body.dataset.hoverWired) {
       body.dataset.hoverWired = '1';
@@ -771,7 +852,7 @@
     const tMin = Math.min(...recent.map((e) => e.timestamp));
     const BINS = 24, span = Math.max(tMax - tMin, 1);
     const slice = span / BINS;
-    body.innerHTML = '';
+    const seen = new Set();
     snap.devices.forEach((d) => {
       const bins = new Array(BINS).fill(0);
       const writeBins = new Array(BINS).fill(0);
@@ -793,64 +874,22 @@
       const defaultValue = total + (total === 1 ? ' event' : ' events') +
         ' \u00b7 ' + totalWrites + (totalWrites === 1 ? ' write' : ' writes') +
         ' \u00b7 peak ' + max + ' per slice';
-      const row = document.createElement('div');
-      row.className = 'heart-row';
-      const name = document.createElement('span');
-      name.className = 'heart-name';
-      name.textContent = deviceName + (wrote ? ' \u00b7 wrote' : '');
-      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svg.setAttribute('class', 'heart-svg' + (wrote ? ' heart-wrote' : ''));
-      svg.setAttribute('role', 'img');
-      svg.setAttribute('aria-label', deviceName + ' heartbeat: ' + defaultValue + '.');
-      const value = document.createElement('span');
-      value.className = 'heart-value';
-      value.textContent = defaultValue;
-      row.append(name, svg, value);
-      body.appendChild(row);
-      // Full width: the sparkline stretches to the widget's width, so
-      // measure the laid-out element and size the viewBox to match
-      // (1:1 scale keeps the marker round). Falls back to 220 when
-      // the widget is hidden or layout is unavailable; the 5s
-      // refresh re-measures when the board changes.
+      seen.add(d.ip);
+      let row = body.querySelector('.heart-row[data-ip="' + d.ip + '"]');
+      if (!row) {
+        row = buildHeartRow(d);
+        body.appendChild(row);
+      }
+      const svg = row.querySelector('.heart-svg');
+      // Full width: size the viewBox to the laid-out element (1:1
+      // scale keeps the marker round). Falls back to 220 when the
+      // widget is hidden or layout is unavailable.
       const W = Math.max(220, Math.round(svg.getBoundingClientRect().width) || 0);
-      svg.setAttribute('viewBox', '0 0 ' + W + ' 30');
-      const pts = bins.map((v, i) =>
-        ((i + 0.5) / BINS * W).toFixed(1) + ',' + (26 - v / max * 22).toFixed(1)).join(' ');
-      const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
-      line.setAttribute('points', pts);
-      svg.appendChild(line);
-      const vline = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      vline.setAttribute('class', 'heart-vline');
-      vline.setAttribute('y1', '0');
-      vline.setAttribute('y2', '30');
-      vline.style.display = 'none';
-      svg.appendChild(vline);
-      const marker = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      marker.setAttribute('class', 'heart-marker');
-      marker.setAttribute('r', '3.6');
-      marker.style.display = 'none';
-      svg.appendChild(marker);
-      row._hb = { bins, writeBins, max, deviceName, defaultValue, tMin, slice, width: W };
-      bins.forEach((count, i) => {
-        const start = tMin + i * slice;
-        const end = start + slice;
-        const hit = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        hit.setAttribute('x', (i / BINS * W).toFixed(1));
-        hit.setAttribute('y', '0');
-        hit.setAttribute('width', (W / BINS).toFixed(1));
-        hit.setAttribute('height', '30');
-        hit.setAttribute('class', 'heart-hit');
-        const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
-        title.textContent = deviceName + ': ' + count + (count === 1 ? ' event' : ' events') +
-          ', ' + writeBins[i] + (writeBins[i] === 1 ? ' write' : ' writes') +
-          ', ' + fmtTime(start) + '\u2013' + fmtTime(end);
-        hit.appendChild(title);
-        hit.addEventListener('pointerenter', () => {
-          heartHoverBin = i;
-          applyHeartHover(i);
-        });
-        svg.appendChild(hit);
-      });
+      row._hb = { bins, writeBins, max, wrote, deviceName, defaultValue, tMin, slice, width: W };
+      updateHeartRow(row, row._hb, W);
+    });
+    body.querySelectorAll('.heart-row').forEach((row) => {
+      if (!seen.has(row.dataset.ip)) row.remove();
     });
     if (heartHoverBin !== null) applyHeartHover(heartHoverBin);
   }
