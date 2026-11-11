@@ -21,6 +21,8 @@ struct AppState {
     running: Arc<AtomicBool>,
     replay_running: Arc<AtomicBool>,
     replay_info: Arc<Mutex<ReplayInfo>>,
+    capture_running: Arc<AtomicBool>,
+    capture_info: Arc<Mutex<CaptureInfo>>,
     anomaly_shared: Arc<Mutex<AnomalyStatusDto>>,
 }
 
@@ -293,8 +295,10 @@ fn start_replay(
     if packets.is_empty() {
         return fail(&state, format!("{label}: no packets in capture"));
     }
-    // One live feed at a time: replaying stops the simulated plant.
+    // One live feed at a time: replaying stops the simulated plant
+    // and any live capture.
     state.running.store(false, Ordering::Relaxed);
+    state.capture_running.store(false, Ordering::Relaxed);
     let speed = speed.unwrap_or(1.0);
     let speed = if speed.is_finite() { speed.clamp(0.25, 100.0) } else { 1.0 };
     let shift = now_ms() - packets[0].timestamp_ms;
@@ -371,6 +375,292 @@ fn stop_replay(state: tauri::State<AppState>) -> ReplayStatus {
 #[tauri::command]
 fn replay_status(state: tauri::State<AppState>) -> ReplayStatus {
     replay_status_of(&state)
+}
+
+// ---- live capture (Phase 7) -------------------------------------------
+/// Shared capture counters, written by the feed thread, read by the UI.
+#[derive(Debug, Clone, Default)]
+struct CaptureInfo {
+    interface: Option<String>,
+    started_at_ms: i64,
+    packets_seen: u64,
+    packets_dropped: u64,
+    last_packet_at_ms: Option<i64>,
+    message: Option<String>,
+    /// A quiet episode already raised its alert; cleared when traffic
+    /// resumes so a *later* episode alerts again instead of spamming.
+    quiet_alerted: bool,
+}
+
+/// One interface libpcap can capture on.
+#[derive(Debug, Serialize)]
+struct InterfaceDto {
+    name: String,
+    description: Option<String>,
+    addresses: Vec<String>,
+}
+
+/// Live-capture state as sent to the frontend. `health` is one of
+/// "off" (not running), "flowing", "quiet" (had traffic, then a
+/// minute of silence — the blind check), "silent" (never saw a
+/// packet). Drop counts are shown, never hidden.
+#[derive(Debug, Serialize)]
+struct CaptureStatus {
+    running: bool,
+    interface: Option<String>,
+    packets_seen: u64,
+    packets_dropped: u64,
+    last_packet_at_ms: Option<i64>,
+    health: String,
+    message: Option<String>,
+}
+
+fn capture_status_of(state: &AppState) -> CaptureStatus {
+    let running = state.capture_running.load(Ordering::Relaxed);
+    let info = state.capture_info.lock().map(|info| info.clone()).unwrap_or_default();
+    let now_s = now_ms() / 1000;
+    let health = if !running {
+        "off".to_string()
+    } else {
+        match deadband_core::capture::capture_health(
+            true,
+            info.started_at_ms / 1000,
+            info.last_packet_at_ms.map(|t| t / 1000),
+            info.packets_seen,
+            now_s,
+        ) {
+            deadband_core::capture::CaptureHealth::Flowing => "flowing".to_string(),
+            deadband_core::capture::CaptureHealth::GoneQuiet => "quiet".to_string(),
+            deadband_core::capture::CaptureHealth::NeverSawTraffic => "silent".to_string(),
+        }
+    };
+    CaptureStatus {
+        running,
+        interface: info.interface,
+        packets_seen: info.packets_seen,
+        packets_dropped: info.packets_dropped,
+        last_packet_at_ms: info.last_packet_at_ms,
+        health,
+        message: info.message,
+    }
+}
+
+#[cfg(feature = "live-capture")]
+fn list_interfaces_inner() -> Result<Vec<InterfaceDto>, String> {
+    deadband_core::capture::list_interfaces().map(|ifs| {
+        ifs.into_iter()
+            .map(|i| InterfaceDto {
+                name: i.name,
+                description: i.description,
+                addresses: i.addresses,
+            })
+            .collect()
+    })
+}
+
+#[cfg(not(feature = "live-capture"))]
+fn list_interfaces_inner() -> Result<Vec<InterfaceDto>, String> {
+    Err("Live capture is not enabled in this build.".to_string())
+}
+
+/// The interfaces libpcap can capture on. Listing needs no capture
+/// permission, so this works before the macOS BPF flow is done.
+#[tauri::command]
+fn list_interfaces() -> Result<Vec<InterfaceDto>, String> {
+    list_interfaces_inner()
+}
+
+/// Starts live capture on one interface. One feed at a time: starting
+/// stops the simulation and any replay. The interface is opened here
+/// so a permission refusal comes straight back to the UI; the feed
+/// thread then owns the capture.
+#[tauri::command]
+fn start_capture(
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+    interface: String,
+) -> CaptureStatus {
+    if state.capture_running.swap(true, Ordering::Relaxed) {
+        return capture_status_of(&state);
+    }
+    state.running.store(false, Ordering::Relaxed);
+    state.replay_running.store(false, Ordering::Relaxed);
+    if let Ok(mut info) = state.capture_info.lock() {
+        *info = CaptureInfo {
+            interface: Some(interface.clone()),
+            started_at_ms: now_ms(),
+            packets_seen: 0,
+            packets_dropped: 0,
+            last_packet_at_ms: None,
+            message: None,
+            quiet_alerted: false,
+        };
+    }
+    spawn_capture_thread(app, &state, interface);
+    capture_status_of(&state)
+}
+
+/// Stops live capture. Stored events stay in the database.
+#[tauri::command]
+fn stop_capture(state: tauri::State<AppState>) -> CaptureStatus {
+    state.capture_running.store(false, Ordering::Relaxed);
+    capture_status_of(&state)
+}
+
+/// Current live-capture state (the UI polls this every 5 s).
+#[tauri::command]
+fn capture_status(state: tauri::State<AppState>) -> CaptureStatus {
+    capture_status_of(&state)
+}
+
+/// The blind check, run by the feed thread about once a second: when
+/// a running capture goes quiet, record one alert event (it shows in
+/// the Events log, the bell and the latest-alert line) and latch it
+/// until traffic resumes.
+#[cfg(feature = "live-capture")]
+fn check_capture_health(
+    store: &Arc<Mutex<deadband_core::store::Store>>,
+    info_handle: &Arc<Mutex<CaptureInfo>>,
+    app: &tauri::AppHandle,
+    interface: &str,
+) {
+    let health = match info_handle.lock() {
+        Ok(mut info) => {
+            let now_s = now_ms() / 1000;
+            let health = deadband_core::capture::capture_health(
+                true,
+                info.started_at_ms / 1000,
+                info.last_packet_at_ms.map(|t| t / 1000),
+                info.packets_seen,
+                now_s,
+            );
+            if health == deadband_core::capture::CaptureHealth::Flowing {
+                info.quiet_alerted = false;
+                return;
+            }
+            if info.quiet_alerted {
+                return;
+            }
+            info.quiet_alerted = true;
+            health
+        }
+        Err(_) => return,
+    };
+    let mut event = match deadband_core::capture::health_alert_event(
+        health,
+        interface,
+        now_ms() / 1000,
+    ) {
+        Some(event) => event,
+        None => return,
+    };
+    if let Ok(store) = store.lock() {
+        if let Ok(id) = store.record_event(&event) {
+            event.id = Some(id);
+        }
+    }
+    let _ = app.emit("traffic", EventDto::from(&event));
+}
+
+#[cfg(feature = "live-capture")]
+fn spawn_capture_thread(
+    app: tauri::AppHandle,
+    state: &AppState,
+    interface: String,
+) {
+    let capture = match deadband_core::capture::open_interface(&interface) {
+        Ok(capture) => capture,
+        Err(message) => {
+            state.capture_running.store(false, Ordering::Relaxed);
+            if let Ok(mut info) = state.capture_info.lock() {
+                info.message = Some(message);
+            }
+            return;
+        }
+    };
+    let store = Arc::clone(&state.store);
+    let running = Arc::clone(&state.capture_running);
+    let info_handle = Arc::clone(&state.capture_info);
+    let anomaly_shared = Arc::clone(&state.anomaly_shared);
+    std::thread::spawn(move || {
+        let mut rules = match store.lock() {
+            Ok(store) => deadband_core::detect::RulesLayer::from_store(&store),
+            Err(_) => deadband_core::detect::RulesLayer::new(),
+        };
+        let mut anomaly = match store.lock() {
+            Ok(store) => deadband_core::detect::AnomalyLayer::from_store(&store),
+            Err(_) => deadband_core::detect::AnomalyLayer::new(),
+        };
+        let mut cap = capture;
+        let mut last_check_ms = 0i64;
+        loop {
+            if !running.load(Ordering::Relaxed) {
+                break;
+            }
+            match cap.next_packet() {
+                Ok(packet) => {
+                    let ts_ms = packet.header.ts.tv_sec * 1000
+                        + packet.header.ts.tv_usec as i64 / 1000;
+                    let owned = deadband_core::source::Packet {
+                        timestamp_ms: ts_ms,
+                        data: packet.data.to_vec(),
+                    };
+                    let events = match store.lock() {
+                        Ok(store) => deadband_core::engine::process_packet_full(
+                            &store, &owned, &mut rules, &mut anomaly,
+                        ),
+                        Err(_) => Vec::new(),
+                    };
+                    publish_anomaly(&anomaly_shared, &anomaly);
+                    for event in &events {
+                        let _ = app.emit("traffic", EventDto::from(event));
+                    }
+                    if let Ok(mut info) = info_handle.lock() {
+                        info.packets_seen += 1;
+                        info.last_packet_at_ms = Some(ts_ms);
+                    }
+                }
+                Err(pcap::Error::TimeoutExpired) => {
+                    // No packet in the 100 ms window: the loop checks
+                    // the stop flag and the blind check below.
+                }
+                Err(e) => {
+                    if let Ok(mut info) = info_handle.lock() {
+                        info.message = Some(format!("Capture stopped: {e}"));
+                    }
+                    break;
+                }
+            }
+            // libpcap drop counters + the blind check, at most once a
+            // second — the check is what makes a silent mirror port
+            // scream instead of failing quietly.
+            let now = now_ms();
+            if now - last_check_ms >= 1000 {
+                last_check_ms = now;
+                if let Ok(stats) = cap.stats() {
+                    if let Ok(mut info) = info_handle.lock() {
+                        info.packets_dropped =
+                            stats.dropped as u64 + stats.if_dropped as u64;
+                    }
+                }
+                check_capture_health(&store, &info_handle, &app, &interface);
+            }
+        }
+        running.store(false, Ordering::Relaxed);
+    });
+}
+
+#[cfg(not(feature = "live-capture"))]
+fn spawn_capture_thread(
+    _app: tauri::AppHandle,
+    state: &AppState,
+    _interface: String,
+) {
+    state.capture_running.store(false, Ordering::Relaxed);
+    if let Ok(mut info) = state.capture_info.lock() {
+        info.message =
+            Some("Live capture is not enabled in this build.".to_string());
+    }
 }
 
 /// One rule, for the Rules view.
@@ -931,6 +1221,8 @@ pub fn run() {
                 running: Arc::new(AtomicBool::new(false)),
                 replay_running: Arc::new(AtomicBool::new(false)),
                 replay_info: Arc::new(Mutex::new(ReplayInfo::default())),
+                capture_running: Arc::new(AtomicBool::new(false)),
+                capture_info: Arc::new(Mutex::new(CaptureInfo::default())),
                 anomaly_shared: Arc::new(Mutex::new(AnomalyStatusDto::default())),
             });
             Ok(())
@@ -955,7 +1247,11 @@ pub fn run() {
             explain_latest_alert,
             placement_suggestions,
             apply_placement,
-            clear_data
+            clear_data,
+            list_interfaces,
+            start_capture,
+            stop_capture,
+            capture_status
         ])
         .run(tauri::generate_context!())
         .expect("error while running Deadband");

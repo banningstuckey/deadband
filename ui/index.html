@@ -44,7 +44,7 @@
     <img id="splash-logo" src="./assets/deadband-logo.jpg" alt="Deadband"
          onerror="var s=document.getElementById('splash'); if(s) s.remove();">
     <p class="splash-sub">Real-time passive OT network monitor</p>
-    <p class="splash-version" id="splash-version">Deadband v0.1.3</p>
+    <p class="splash-version" id="splash-version">Deadband v0.1.4</p>
   </div>
   <div class="shell">
     <nmui-navigation rail expanded id="rail">
@@ -226,6 +226,29 @@
           (192.168.50.0/24) that Deadband knows nothing about — including one
           device that does not belong. See if you can spot it in the log before
           Phase 4's rules learn to shout about it.</p>
+        </nmui-card>
+
+        <nmui-card outlined>
+          <h2 class="card-title">Live capture (Phase 7)</h2>
+          <p>Watch this Mac's own network live — real packets from a real interface,
+          through the same pipeline as the simulation and the replays. In a plant
+          the sensor plugs into a switch mirror/SPAN port; in the lab, your own
+          interface is enough to see your own traffic and prove the detection
+          layers work on the real thing.</p>
+          <p id="capture-status" class="sim-status">Live capture is off</p>
+          <div class="card-actions replay-controls">
+            <label class="replay-speed">Interface
+              <select id="capture-interface"></select>
+            </label>
+            <nmui-button filled id="btn-capture-start">Start live capture</nmui-button>
+            <nmui-button outlined id="btn-capture-stop">Stop</nmui-button>
+          </div>
+          <p class="dim">Starting capture stops the simulation and any replay — one feed at a time.
+          Drop counts are shown, never hidden: if packets are being dropped, the sensor
+          is overloaded and the numbers will say so.</p>
+          <p class="dim" id="capture-quiet" hidden></p>
+          <p class="dim">If starting fails with a permission error, the Mac needs BPF access:
+          join the access_bpf group, or run with sudo for a lab test — see docs/live-capture.md.</p>
         </nmui-card>
 
         <nmui-card outlined class="log-card">
@@ -437,7 +460,7 @@
         </nmui-card>
       </section>
 
-      <footer class="note">Deadband v0.1.3 · UI: nmui v0.43.7, vendored and pinned (ui/vendor/nmui) · Themes selectable in Settings</footer>
+      <footer class="note">Deadband v0.1.4 · UI: nmui v0.43.7, vendored and pinned (ui/vendor/nmui) · Themes selectable in Settings</footer>
     </main>
   </div>
 
@@ -925,6 +948,68 @@
   });
   setInterval(refreshReplayStatus, 1000);
 
+  // ---- live capture (Phase 7) -------------------------------------------
+  // Real packets from a real interface, through the same pipeline. The
+  // blind check lives here too: a running capture that goes quiet says
+  // so in the open (and raises an alert event, so the bell and the
+  // latest-alert line pick it up).
+  const captureStatusEl = document.getElementById('capture-status');
+  const captureIfaceEl = document.getElementById('capture-interface');
+  const captureQuietEl = document.getElementById('capture-quiet');
+
+  function showCaptureStatus(s) {
+    if (!s) return;
+    if (s.message) {
+      captureStatusEl.textContent = 'Capture: ' + s.message;
+    } else if (s.running) {
+      captureStatusEl.textContent = 'Capturing on ' + (s.interface || '?') +
+        ' · ' + s.packets_seen + ' packets seen · ' + s.packets_dropped + ' dropped';
+    } else {
+      captureStatusEl.textContent = 'Live capture is off';
+    }
+    if (!s.running || s.health === 'flowing') {
+      captureQuietEl.hidden = true;
+    } else if (s.health === 'quiet') {
+      captureQuietEl.hidden = false;
+      captureQuietEl.textContent = 'Capture has gone quiet — no packets for over a minute. The sensor may be blind: check the mirror port / SPAN session, then the cable.';
+    } else if (s.health === 'silent') {
+      captureQuietEl.hidden = false;
+      captureQuietEl.textContent = 'Capture sees nothing — this interface has delivered no packets. Check it is the right one, and that the Mac allows capture.';
+    }
+  }
+
+  async function loadCaptureInterfaces() {
+    if (!invoke) return;
+    try {
+      const ifs = await invoke('list_interfaces');
+      captureIfaceEl.innerHTML = '';
+      ifs.forEach((i) => {
+        const opt = document.createElement('option');
+        opt.value = i.name;
+        opt.textContent = i.description ? i.name + ' — ' + i.description : i.name;
+        captureIfaceEl.appendChild(opt);
+      });
+      if (!ifs.length) captureStatusEl.textContent = 'No interfaces found — live capture is unavailable on this machine.';
+    } catch (err) {
+      captureStatusEl.textContent = 'Live capture unavailable: ' + err;
+    }
+  }
+
+  document.getElementById('btn-capture-start').addEventListener('click', async () => {
+    if (!invoke) return;
+    const iface = captureIfaceEl.value;
+    if (!iface) { captureStatusEl.textContent = 'Pick an interface first.'; return; }
+    try { showCaptureStatus(await invoke('start_capture', { interface: iface })); }
+    catch (err) { captureStatusEl.textContent = 'Capture failed to start: ' + err; }
+    refreshStatus();
+  });
+  document.getElementById('btn-capture-stop').addEventListener('click', async () => {
+    if (!invoke) return;
+    try { showCaptureStatus(await invoke('stop_capture')); }
+    catch (err) { /* best-effort */ }
+  });
+  loadCaptureInterfaces();
+
   // ---- alert bell -----------------------------------------------------
   // One place alerts are always visible, whatever view you're on. The
   // badge counts alerts raised since you last looked; opening the
@@ -1027,6 +1112,7 @@
       const latestAlert = alerts[0] || null;
       window._latestAlert = latestAlert;
       updateAlertBell(alerts);
+      try { showCaptureStatus(await invoke('capture_status')); } catch (err) { /* capture status is best-effort */ }
       const stateEl = document.getElementById('ov-state');
       const state = anomaly.risk_score >= 50 || rules.alerts_total > 0
         ? 'Needs attention' : anomaly.learning ? 'Learning' : 'Quiet';

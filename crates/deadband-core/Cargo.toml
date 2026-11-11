@@ -10,3 +10,11 @@ description = "Deadband core engine: passive OT traffic ingestion, parsing, asse
 # SQLite storage. `bundled` compiles SQLite from source so the app needs
 # no system SQLite install on Mac, Windows, or Linux.
 rusqlite = { version = "0.32", features = ["bundled"] }
+
+# Live capture (Phase 7) is an optional feature: the VM has no system
+# libpcap at all, so the default build must not need it. The Mac
+# build enables it through the Tauri shell's dependency.
+pcap = { version = "2", optional = true }
+
+[features]
+live-capture = ["dep:pcap"]

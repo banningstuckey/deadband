@@ -33,6 +33,7 @@
 //! 3. **Local first, no cloud.** All data stays on the user's machine.
 
 pub mod analyst;
+pub mod capture;
 pub mod detect;
 pub mod engine;
 pub mod model;
