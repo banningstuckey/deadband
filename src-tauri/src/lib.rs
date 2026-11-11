@@ -560,7 +560,7 @@ fn spawn_capture_thread(
     state: &AppState,
     interface: String,
 ) {
-    let capture = match deadband_core::capture::open_interface(&interface) {
+    let capture = match deadband_core::capture::LiveCapture::open(&interface) {
         Ok(capture) => capture,
         Err(message) => {
             state.capture_running.store(false, Ordering::Relaxed);
@@ -589,13 +589,11 @@ fn spawn_capture_thread(
             if !running.load(Ordering::Relaxed) {
                 break;
             }
-            match cap.next_packet() {
-                Ok(packet) => {
-                    let ts_ms = packet.header.ts.tv_sec * 1000
-                        + packet.header.ts.tv_usec as i64 / 1000;
+            match cap.next() {
+                Ok(Some(raw)) => {
                     let owned = deadband_core::source::Packet {
-                        timestamp_ms: ts_ms,
-                        data: packet.data.to_vec(),
+                        timestamp_ms: raw.timestamp_ms,
+                        data: raw.data,
                     };
                     let events = match store.lock() {
                         Ok(store) => deadband_core::engine::process_packet_full(
@@ -609,16 +607,16 @@ fn spawn_capture_thread(
                     }
                     if let Ok(mut info) = info_handle.lock() {
                         info.packets_seen += 1;
-                        info.last_packet_at_ms = Some(ts_ms);
+                        info.last_packet_at_ms = Some(raw.timestamp_ms);
                     }
                 }
-                Err(pcap::Error::TimeoutExpired) => {
+                Ok(None) => {
                     // No packet in the 100 ms window: the loop checks
                     // the stop flag and the blind check below.
                 }
-                Err(e) => {
+                Err(message) => {
                     if let Ok(mut info) = info_handle.lock() {
-                        info.message = Some(format!("Capture stopped: {e}"));
+                        info.message = Some(message);
                     }
                     break;
                 }
@@ -629,11 +627,8 @@ fn spawn_capture_thread(
             let now = now_ms();
             if now - last_check_ms >= 1000 {
                 last_check_ms = now;
-                if let Ok(stats) = cap.stats() {
-                    if let Ok(mut info) = info_handle.lock() {
-                        info.packets_dropped =
-                            stats.dropped as u64 + stats.if_dropped as u64;
-                    }
+                if let Ok(mut info) = info_handle.lock() {
+                    info.packets_dropped = cap.dropped();
                 }
                 check_capture_health(&store, &info_handle, &app, &interface);
             }

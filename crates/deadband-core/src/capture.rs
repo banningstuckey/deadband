@@ -119,7 +119,7 @@ pub fn list_interfaces() -> Result<Vec<InterfaceInfo>, String> {
 /// thread can check its stop flag regularly. Errors are plain
 /// English; a permission refusal names the macOS BPF step.
 #[cfg(feature = "live-capture")]
-pub fn open_interface(name: &str) -> Result<pcap::Capture<pcap::Active>, String> {
+fn open_interface(name: &str) -> Result<pcap::Capture<pcap::Active>, String> {
     let devices = pcap::Device::list().map_err(|e| format!("Could not list interfaces: {e}"))?;
     let device = devices
         .into_iter()
@@ -151,6 +151,58 @@ pub fn open_interface(name: &str) -> Result<pcap::Capture<pcap::Active>, String>
             }
         })?;
     Ok(capture)
+}
+
+/// One raw packet off the wire, owned, with its capture timestamp.
+#[cfg(feature = "live-capture")]
+#[derive(Debug, Clone)]
+pub struct RawPacket {
+    /// When libpcap saw it, Unix milliseconds.
+    pub timestamp_ms: i64,
+    /// The whole frame, Ethernet header onward.
+    pub data: Vec<u8>,
+}
+
+/// An open live capture. The shell owns one of these and never sees
+/// libpcap itself: `next` answers Some(packet) / None on timeout /
+/// Err with a plain message, so the shell matches on plain Rust
+/// types instead of naming another crate's error type (it cannot —
+/// `pcap` is this crate's dependency, not the shell's).
+#[cfg(feature = "live-capture")]
+pub struct LiveCapture {
+    inner: pcap::Capture<pcap::Active>,
+}
+
+#[cfg(feature = "live-capture")]
+impl LiveCapture {
+    /// Opens `name` for live capture (see `open_interface`).
+    pub fn open(name: &str) -> Result<Self, String> {
+        Ok(Self { inner: open_interface(name)? })
+    }
+
+    /// The next packet: `Some` when one arrives, `None` when the
+    /// 100 ms read times out (the feed thread's chance to check its
+    /// stop flag), `Err` on a real failure with a plain message.
+    pub fn next(&mut self) -> Result<Option<RawPacket>, String> {
+        match self.inner.next_packet() {
+            Ok(packet) => Ok(Some(RawPacket {
+                timestamp_ms: packet.header.ts.tv_sec * 1000
+                    + packet.header.ts.tv_usec as i64 / 1000,
+                data: packet.data.to_vec(),
+            })),
+            Err(pcap::Error::TimeoutExpired) => Ok(None),
+            Err(e) => Err(format!("Capture stopped: {e}")),
+        }
+    }
+
+    /// Packets libpcap dropped because the reader was too slow (plus
+    /// interface drops). Shown, never hidden.
+    pub fn dropped(&mut self) -> u64 {
+        self.inner
+            .stats()
+            .map(|s| s.dropped as u64 + s.if_dropped as u64)
+            .unwrap_or(0)
+    }
 }
 
 #[cfg(test)]
