@@ -103,23 +103,23 @@
             <button class="chip-btn" id="map-mode-full" selected>Full map</button>
             <button class="chip-btn" id="map-mode-changes">Changes only</button>
             <button class="chip-btn" id="map-baseline-reset">Reset baseline</button>
-            <span class="map-zoom">
-              <button class="chip-btn" id="map-zoom-out" aria-label="Zoom out">−</button>
-              <span id="map-zoom-label" class="dim">100%</span>
-              <button class="chip-btn" id="map-zoom-in" aria-label="Zoom in">+</button>
-              <button class="chip-btn" id="map-zoom-reset">Reset view</button>
-            </span>
           </div>
           <div class="map-scroll">
             <svg id="purdue-map" viewBox="0 0 1040 872" role="img"
                  aria-label="Live Purdue Model map of the monitored network"></svg>
           </div>
+          <div id="map-popover" class="map-popover" hidden>
+            <div class="map-popover-head">
+              <strong id="map-popover-title">Detail</strong>
+              <button class="chip-btn" id="map-popover-close" aria-label="Close detail">✕</button>
+            </div>
+            <div id="map-popover-body"></div>
+          </div>
           <p class="dim">Bands are Purdue levels; the dashed band is the IT/OT DMZ.
           Lines are <strong>conduits</strong> — the observed paths traffic takes between
-          zones — and they pulse as packets flow. Use + / \u2212 to zoom, drag to pan,
-          double-click a device to zoom to it; zooming in past 2× also labels
-          each conduit with its protocol and port. Click a device or a conduit for
-          detail, then jump straight to its events in the log.
+          zones — and they pulse as packets flow. Drag the map to scroll it when it
+          overflows. Click a device or a conduit for detail, then jump straight to
+          its events in the log.
           Start the plant from the <strong>Events</strong> view.</p>
         </nmui-card>
 
@@ -1290,12 +1290,6 @@
         '" stroke-width="' + width + '"><title>' +
         esc(c.src_ip) + ' → ' + esc(c.dst_ip) + ':' + c.dst_port + ' (' +
         esc(c.protocol) + ', ' + c.packet_count + ' packets)</title></line>';
-      // Zoomed-in detail: protocol + port at the conduit midpoint.
-      // Hidden until the map is zoomed past 2x (CSS .zoomed rule).
-      const mx = ((a.x + a.w / 2) + (b.x + b.w / 2)) / 2;
-      const my = ((a.y + NODE_H / 2) + (b.y + NODE_H / 2)) / 2;
-      out += '<text class="c-label" x="' + mx.toFixed(1) + '" y="' + (my - 5).toFixed(1) +
-        '" text-anchor="middle">' + esc(c.protocol) + ' :' + c.dst_port + '</text>';
     });
 
     // Device nodes (text clipped to the node's computed width).
@@ -1372,24 +1366,26 @@
   const detailTitle = document.getElementById('detail-title');
   const detailBody = document.getElementById('detail-body');
 
-  function detailList(items) {
-    detailBody.innerHTML = '';
-    if (!items.length) {
-      const p = document.createElement('p');
-      p.className = 'dim';
-      p.textContent = 'No recent events.';
-      detailBody.appendChild(p);
-      return;
-    }
-    const ul = document.createElement('ul');
-    ul.className = 'detail-events';
-    items.forEach((dto) => {
-      const li = document.createElement('li');
-      li.textContent = fmtTime(dto.timestamp) + ' — ' + dto.summary;
-      ul.appendChild(li);
-    });
-    detailBody.appendChild(ul);
+  function detailItemsHtml(items) {
+    if (!items.length) return '<p class="dim">No recent events.</p>';
+    return '<ul class="detail-events">' + items.map((dto) =>
+      '<li>' + esc(fmtTime(dto.timestamp)) + ' — ' + esc(dto.summary) + '</li>').join('') + '</ul>';
   }
+  // One detail, shown twice: the side panel (boards that have it) and
+  // the map popover (every board). The drill button is handled by one
+  // delegated listener, so both copies work from the same markup.
+  function showDetail(title, bodyHtml) {
+    if (detailTitle) detailTitle.textContent = title;
+    if (detailBody) detailBody.innerHTML = bodyHtml;
+    showMapPopover(title, bodyHtml);
+  }
+  document.addEventListener('click', (e) => {
+    const b = e.target && e.target.closest ? e.target.closest('[data-log-device]') : null;
+    if (!b) return;
+    let ips = [];
+    try { ips = JSON.parse(b.dataset.logDevice); } catch (err) { return; }
+    showLogFor(ips, b.dataset.logLabel || ips.join(', '));
+  });
 
   async function recentFor(filter) {
     if (!invoke) return [];
@@ -1403,112 +1399,92 @@
     const pos = positions.get(ip);
     if (!pos) return;
     const d = pos.d;
-    detailTitle.textContent = 'Device — ' + (d.label || ip);
     const conns = snapshot.connections.filter((c) => c.src_ip === ip || c.dst_ip === ip);
-    detailBody.innerHTML = '';
-    const p = document.createElement('p');
-    p.textContent = (d.label || ip) + ' · ' + d.role + ' · ' +
-      (d.level_name || 'Purdue level not yet assigned') + ' · ' + ip;
-    detailBody.appendChild(p);
+    let body = '<p>' + esc(d.label || ip) + ' · ' + esc(d.role) + ' · ' +
+      esc(d.level_name || 'Purdue level not yet assigned') + ' · ' + esc(ip) + '</p>';
     if (conns.length) {
-      const cp = document.createElement('p');
-      cp.className = 'dim';
-      cp.textContent = 'Conduits: ' + conns.map((c) =>
-        (c.src_ip === ip ? '→ ' + c.dst_ip : '← ' + c.src_ip) + ':' + c.dst_port +
-        ' (' + c.protocol + ', ' + c.packet_count + ' pkts)').join(' · ');
-      detailBody.appendChild(cp);
+      body += '<p class="dim">Conduits: ' + conns.map((c) =>
+        esc((c.src_ip === ip ? '→ ' + c.dst_ip : '← ' + c.src_ip) + ':' + c.dst_port +
+        ' (' + c.protocol + ', ' + c.packet_count + ' pkts)')).join(' · ') + '</p>';
     }
-    detailList(await recentFor((e) => e.src_ip === ip || e.dst_ip === ip));
-    const btn = document.createElement('button');
-    btn.className = 'chip-btn';
-    btn.textContent = 'View in Events log \u2192';
-    btn.addEventListener('click', () => showLogFor([ip], d.label || ip));
-    detailBody.appendChild(btn);
+    body += detailItemsHtml(await recentFor((e) => e.src_ip === ip || e.dst_ip === ip));
+    body += '<button class="chip-btn" data-log-device="' + esc(JSON.stringify([ip])) +
+      '" data-log-label="' + esc(d.label || ip) + '">View in Events log →</button>';
+    showDetail('Device — ' + (d.label || ip), body);
   }
 
   async function showConduit(a, b) {
     const conn = snapshot.connections.find((c) =>
       (c.src_ip === a && c.dst_ip === b) || (c.src_ip === b && c.dst_ip === a));
-    detailTitle.textContent = 'Conduit — ' + a + ' ↔ ' + b;
-    detailBody.innerHTML = '';
-    const p = document.createElement('p');
-    p.textContent = conn
-      ? a + ' → ' + b + ':' + conn.dst_port + ' · ' + conn.protocol + ' · ' +
+    let body = '<p>' + (conn
+      ? esc(a) + ' → ' + esc(b) + ':' + conn.dst_port + ' · ' + esc(conn.protocol) + ' · ' +
         conn.packet_count + ' packets observed'
-      : 'No stored connection for this pair yet.';
-    detailBody.appendChild(p);
-    detailList(await recentFor((e) =>
+      : 'No stored connection for this pair yet.') + '</p>';
+    body += detailItemsHtml(await recentFor((e) =>
       (e.src_ip === a && e.dst_ip === b) || (e.src_ip === b && e.dst_ip === a)));
-    const btn = document.createElement('button');
-    btn.className = 'chip-btn';
-    btn.textContent = 'View in Events log \u2192';
-    btn.addEventListener('click', () => showLogFor([a, b], a + ' \u2194 ' + b));
-    detailBody.appendChild(btn);
+    body += '<button class="chip-btn" data-log-device="' + esc(JSON.stringify([a, b])) +
+      '" data-log-label="' + esc(a + ' ↔ ' + b) + '">View in Events log →</button>';
+    showDetail('Conduit — ' + a + ' ↔ ' + b, body);
   }
+
+  // ---- map detail popover ---------------------------------------------
+  // The detail panel lives in a dashboard widget, so on boards without
+  // it (Plant rhythm) a click updated a hidden panel and nothing
+  // visibly happened. The popover sits over the map itself, so detail
+  // shows on ANY board. The side panel still updates too, for boards
+  // that have it.
+  const mapPopover = document.getElementById('map-popover');
+  const mapPopoverTitle = document.getElementById('map-popover-title');
+  const mapPopoverBody = document.getElementById('map-popover-body');
+  function showMapPopover(title, bodyHtml) {
+    if (mapPopoverTitle) mapPopoverTitle.textContent = title;
+    if (mapPopoverBody) mapPopoverBody.innerHTML = bodyHtml;
+    if (mapPopover) mapPopover.hidden = false;
+  }
+  function hideMapPopover() {
+    if (mapPopover) mapPopover.hidden = true;
+  }
+  const mapPopoverClose = document.getElementById('map-popover-close');
+  if (mapPopoverClose) mapPopoverClose.addEventListener('click', hideMapPopover);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') hideMapPopover();
+  });
 
   svg.addEventListener('click', (e) => {
     // A drag that just ended also fires a click — ignore it, so
-    // panning the map never opens a detail panel by accident.
+    // scrolling the map never opens a detail panel by accident.
     if (mapDragged) { mapDragged = false; return; }
     const node = e.target.closest('.node');
     if (node) { showDevice(node.dataset.ip); return; }
     const line = e.target.closest('.conduit');
-    if (line) showConduit(line.dataset.a, line.dataset.b);
+    if (line) { showConduit(line.dataset.a, line.dataset.b); return; }
+    hideMapPopover();
   });
 
-  // ---- map pan / zoom ---------------------------------------------------
-  // The world is 1040x872 (the viewBox the map is drawn in). Zooming
-  // and panning just move a smaller window over it, so the map keeps
-  // working at any plant size: a crowded band is read by zooming in,
-  // not by shrinking the nodes further. renderMap() only replaces the
-  // SVG's children, so this state survives every refresh.
-  const MAP_W = 1040, MAP_H = 872;
-  let mapView = { x: 0, y: 0, w: MAP_W, h: MAP_H };
+  // ---- map drag-to-scroll -----------------------------------------------
+  // No zoom anymore (removed at Banning's word — it fought page
+  // scrolling). Dragging scrolls the map's container, for when the
+  // plant outgrows the card. Tracked on the window so the drag keeps
+  // working if the pointer leaves the map; nothing captures the
+  // pointer, so clicks keep their real target.
   let mapDragged = false;
-  function applyMapView() {
-    mapView.w = Math.min(MAP_W, Math.max(MAP_W / 8, mapView.w));
-    mapView.h = mapView.w * MAP_H / MAP_W;
-    mapView.x = Math.min(Math.max(mapView.x, 0), MAP_W - mapView.w);
-    mapView.y = Math.min(Math.max(mapView.y, 0), MAP_H - mapView.h);
-    svg.setAttribute('viewBox', [mapView.x, mapView.y, mapView.w, mapView.h]
-      .map((v) => v.toFixed(1)).join(' '));
-    svg.classList.toggle('zoomed', mapView.w < MAP_W / 2);
-    const label = document.getElementById('map-zoom-label');
-    if (label) label.textContent = Math.round(MAP_W / mapView.w * 100) + '%';
-  }
-  function zoomMapAt(cx, cy, factor) {
-    const fx = (cx - mapView.x) / mapView.w, fy = (cy - mapView.y) / mapView.h;
-    mapView.w = mapView.w * factor;
-    mapView.h = mapView.w * MAP_H / MAP_W;
-    mapView.x = cx - fx * mapView.w;
-    mapView.y = cy - fy * mapView.h;
-    applyMapView();
-  }
-  function zoomMapCenter(factor) {
-    zoomMapAt(mapView.x + mapView.w / 2, mapView.y + mapView.h / 2, factor);
-  }
   let mapDrag = null;
+  const mapScroller = svg.closest('.map-scroll');
   svg.addEventListener('pointerdown', (e) => {
     // A new gesture starts fresh: a stale drag flag must never eat
     // the next click (e.g. a drag that ended outside the window).
     mapDragged = false;
-    mapDrag = { x: e.clientX, y: e.clientY, vx: mapView.x, vy: mapView.y, moved: false };
+    mapDrag = { x: e.clientX, y: e.clientY,
+      sl: mapScroller ? mapScroller.scrollLeft : 0,
+      st: mapScroller ? mapScroller.scrollTop : 0, moved: false };
     svg.classList.add('dragging');
   });
-  // Listened on the window, not the svg: the drag keeps tracking
-  // even if the pointer leaves the map, and nothing retargets the
-  // click that follows — so device clicks work again.
   window.addEventListener('pointermove', (e) => {
-    if (!mapDrag) return;
-    const r = svg.getBoundingClientRect();
-    const w = r.width || MAP_W, h = r.height || MAP_H;
-    const dx = (e.clientX - mapDrag.x) / w * mapView.w;
-    const dy = (e.clientY - mapDrag.y) / h * mapView.h;
+    if (!mapDrag || !mapScroller) return;
     if (Math.abs(e.clientX - mapDrag.x) + Math.abs(e.clientY - mapDrag.y) > 4) mapDrag.moved = true;
     if (mapDrag.moved) {
-      mapView.x = mapDrag.vx - dx;
-      mapView.y = mapDrag.vy - dy;
-      applyMapView();
+      mapScroller.scrollLeft = mapDrag.sl - (e.clientX - mapDrag.x);
+      mapScroller.scrollTop = mapDrag.st - (e.clientY - mapDrag.y);
     }
   });
   function endMapDrag() {
@@ -1518,26 +1494,6 @@
   }
   window.addEventListener('pointerup', endMapDrag);
   window.addEventListener('pointercancel', endMapDrag);
-  svg.addEventListener('dblclick', (e) => {
-    const node = e.target.closest('.node');
-    if (!node) return;
-    const pos = positions.get(node.dataset.ip);
-    if (!pos) return;
-    mapView.w = MAP_W / 3;
-    mapView.h = mapView.w * MAP_H / MAP_W;
-    mapView.x = pos.x + pos.w / 2 - mapView.w / 2;
-    mapView.y = pos.y + NODE_H / 2 - mapView.h / 2;
-    applyMapView();
-  });
-  const zoomInBtn = document.getElementById('map-zoom-in');
-  if (zoomInBtn) zoomInBtn.addEventListener('click', () => zoomMapCenter(0.8));
-  const zoomOutBtn = document.getElementById('map-zoom-out');
-  if (zoomOutBtn) zoomOutBtn.addEventListener('click', () => zoomMapCenter(1.25));
-  const zoomResetBtn = document.getElementById('map-zoom-reset');
-  if (zoomResetBtn) zoomResetBtn.addEventListener('click', () => {
-    mapView = { x: 0, y: 0, w: MAP_W, h: MAP_H };
-    applyMapView();
-  });
 
   // ---- live pulses ------------------------------------------------------
   function pulse(dto) {
