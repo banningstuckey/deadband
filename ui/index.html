@@ -56,6 +56,7 @@
           <div class="dash-tabs" id="dash-tabs"></div>
           <button class="chip-btn" id="dash-new">+ New dashboard</button>
           <button class="chip-btn" id="dash-customize">Customize</button>
+          <span class="dim" id="dash-desc"></span>
         </div>
         <div class="dash-palette span-all" id="dash-palette" hidden>
           <span class="stat-label">Add widget:</span>
@@ -272,9 +273,41 @@
 
       <section id="view-settings" class="view" hidden>
         <nmui-card outlined>
-          <h2 class="card-title">Settings</h2>
-          <p>Nothing to configure yet. Deadband is local-first: events are stored
-          in a SQLite file in the app's data directory on this machine.</p>
+          <h2 class="card-title">Preferences</h2>
+          <div class="setting-row">
+            <label for="set-launch-dash">Dashboard shown at launch</label>
+            <select id="set-launch-dash" class="text-input"></select>
+          </div>
+          <div class="setting-row">
+            <label for="set-log-filter">Event log opens on</label>
+            <select id="set-log-filter" class="text-input">
+              <option value="important">Important events</option>
+              <option value="alerts">Alerts only</option>
+              <option value="writes">Writes only</option>
+              <option value="all">All traffic</option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <label for="set-analyst-model">Preferred analyst model</label>
+            <select id="set-analyst-model" class="text-input">
+              <option value="">First available</option>
+            </select>
+          </div>
+          <p class="dim">Preferences live on this machine only, like everything
+          else in Deadband.</p>
+        </nmui-card>
+
+        <nmui-card outlined>
+          <h2 class="card-title">Stored data</h2>
+          <p id="data-stats">Checking what's stored…</p>
+          <p class="dim">Events are stored in a SQLite file in the app's data
+          directory on this machine — plant data never leaves it. Clearing
+          wipes devices, connections, and events; every baseline relearns
+          from zero, which is handy in the lab and a real decision in the field.</p>
+          <div class="card-actions">
+            <nmui-button tonal id="btn-clear-data">Clear stored data</nmui-button>
+          </div>
+          <p class="dim" id="clear-status"></p>
         </nmui-card>
       </section>
 
@@ -352,6 +385,7 @@
   document.querySelectorAll('#log-filters .chip-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       logFilter = btn.dataset.filter;
+      try { localStorage.setItem('deadband.logFilter', logFilter); } catch (err) {}
       document.querySelectorAll('#log-filters .chip-btn')
         .forEach((b) => b.toggleAttribute('selected', b === btn));
       logEl.querySelectorAll('.log-row').forEach((row) => {
@@ -360,6 +394,15 @@
       });
     });
   });
+
+  try {
+    const savedFilter = localStorage.getItem('deadband.logFilter');
+    if (savedFilter && ['important', 'alerts', 'writes', 'all'].includes(savedFilter)) {
+      logFilter = savedFilter;
+      document.querySelectorAll('#log-filters .chip-btn')
+        .forEach((b) => b.toggleAttribute('selected', b.dataset.filter === savedFilter));
+    }
+  } catch (err) {}
 
   function addRow(dto, prepend) {
     if (emptyEl) emptyEl.remove();
@@ -685,6 +728,10 @@
           opt.value = m; opt.textContent = m;
           analystModelEl.appendChild(opt);
         });
+        try {
+          const savedModel = localStorage.getItem('deadband.analystModel');
+          if (savedModel && a.models.includes(savedModel)) analystModelEl.value = savedModel;
+        } catch (err) {}
       }
     } catch (err) { /* analyst card is best-effort */ }
   }
@@ -1113,12 +1160,17 @@
     story: 'Incident storyboard', traj: 'Trajectory', heart: 'Heartbeats',
   };
   const WIDGET_IDS = Object.keys(WIDGET_NAMES);
-  const DASH_KEY = 'deadband.dashboards.v1';
+  const DASH_KEY = 'deadband.dashboards.v2';
   function defaultDashboards() {
     return [
-      { id: 'main', name: 'Overview', widgets: ['overview', 'map', 'detail', 'story', 'traj', 'heart'], seen: 0 },
-      { id: 'plant', name: 'Plant', widgets: ['map', 'plant', 'engine', 'safety', 'detail'], seen: 0 },
-      { id: 'incidents', name: 'Incidents', widgets: ['overview', 'story', 'traj'], seen: 0 },
+      { id: 'main', name: 'Overview', desc: 'The 10-second glance: plant state, the gauge, the map, the latest incident.',
+        widgets: ['overview', 'map', 'detail', 'story'], seen: 0 },
+      { id: 'incidents', name: 'Incidents', desc: 'When something fires: how the story unfolded, who is climbing, device rhythm.',
+        widgets: ['story', 'traj', 'overview', 'heart'], seen: 0 },
+      { id: 'rhythm', name: 'Plant rhythm', desc: 'Every device heartbeat on one board — steady is healthy, frantic or flat is not.',
+        widgets: ['heart', 'map', 'traj'], seen: 0 },
+      { id: 'setup', name: 'Setup & safety', desc: 'Commissioning and the lab: the plant, the engine, and the rules Deadband lives by.',
+        widgets: ['map', 'plant', 'engine', 'safety', 'detail'], seen: 0 },
     ];
   }
   let dashboards = defaultDashboards();
@@ -1130,6 +1182,10 @@
       activeDash = saved.activeDash || dashboards[0].id;
     }
   } catch (err) { /* fall back to defaults */ }
+  try {
+    const launchPref = localStorage.getItem('deadband.launchDash');
+    if (launchPref && dashboards.some((d) => d.id === launchPref)) activeDash = launchPref;
+  } catch (err) {}
   let customizing = false;
   const currentDash = () => dashboards.find((d) => d.id === activeDash) || dashboards[0];
   const widgetEl = (id) => document.querySelector('#view-live [data-widget="' + id + '"]');
@@ -1193,6 +1249,8 @@
   }
   function applyDashboard() {
     const d = currentDash();
+    const descEl = document.getElementById('dash-desc');
+    if (descEl) descEl.textContent = d.desc || '';
     WIDGET_IDS.forEach((id) => {
       const el = widgetEl(id);
       if (!el) return;
@@ -1280,6 +1338,85 @@
     });
   });
   applyDashboard();
+
+  // ---- settings wiring ------------------------------------------------------
+  const setLaunch = document.getElementById('set-launch-dash');
+  function syncLaunchOptions() {
+    if (!setLaunch) return;
+    const current = setLaunch.value;
+    setLaunch.innerHTML = '';
+    dashboards.forEach((d) => {
+      const opt = document.createElement('option');
+      opt.value = d.id; opt.textContent = d.name;
+      setLaunch.appendChild(opt);
+    });
+    try { setLaunch.value = localStorage.getItem('deadband.launchDash') || dashboards[0].id; }
+    catch (err) { setLaunch.value = current || dashboards[0].id; }
+  }
+  syncLaunchOptions();
+  if (setLaunch) setLaunch.addEventListener('change', () => {
+    try { localStorage.setItem('deadband.launchDash', setLaunch.value); } catch (err) {}
+  });
+  const setLogFilter = document.getElementById('set-log-filter');
+  if (setLogFilter) {
+    try { setLogFilter.value = localStorage.getItem('deadband.logFilter') || 'important'; } catch (err) {}
+    setLogFilter.addEventListener('change', () => {
+      try { localStorage.setItem('deadband.logFilter', setLogFilter.value); } catch (err) {}
+      const chip = document.querySelector('#log-filters .chip-btn[data-filter="' + setLogFilter.value + '"]');
+      if (chip) chip.click();
+    });
+  }
+  const setModel = document.getElementById('set-analyst-model');
+  if (setModel && invoke) {
+    invoke('analyst_status').then((a) => {
+      (a.models || []).forEach((m) => {
+        const opt = document.createElement('option');
+        opt.value = m; opt.textContent = m;
+        setModel.appendChild(opt);
+      });
+      try { setModel.value = localStorage.getItem('deadband.analystModel') || ''; } catch (err) {}
+    }).catch(() => {});
+    setModel.addEventListener('change', () => {
+      try { localStorage.setItem('deadband.analystModel', setModel.value); } catch (err) {}
+    });
+  }
+  const dataStats = document.getElementById('data-stats');
+  async function loadDataStats() {
+    if (!invoke || !dataStats) return;
+    try {
+      const s = await invoke('simulation_status');
+      dataStats.textContent = s.devices + ' devices known · ' + s.events + ' events stored';
+    } catch (err) { /* best-effort */ }
+  }
+  loadDataStats();
+  setInterval(loadDataStats, 10000);
+  const btnClear = document.getElementById('btn-clear-data');
+  const clearStatus = document.getElementById('clear-status');
+  let clearArmed = false, clearTimer = null;
+  if (btnClear) btnClear.addEventListener('click', async () => {
+    if (!invoke) return;
+    if (!clearArmed) {
+      clearArmed = true;
+      btnClear.textContent = 'Click again to confirm wipe';
+      if (clearStatus) clearStatus.textContent = 'This erases everything Deadband has learned on this machine.';
+      clearTimer = setTimeout(() => {
+        clearArmed = false;
+        btnClear.textContent = 'Clear stored data';
+      }, 6000);
+      return;
+    }
+    clearTimeout(clearTimer);
+    clearArmed = false;
+    btnClear.textContent = 'Clear stored data';
+    try {
+      await invoke('clear_data');
+      if (clearStatus) clearStatus.textContent = 'Cleared. Baselines will relearn from zero.';
+      loadDataStats();
+      await refreshMap();
+    } catch (err) {
+      if (clearStatus) clearStatus.textContent = 'Clear failed: ' + err;
+    }
+  });
 
   (async () => {
     renderMap();

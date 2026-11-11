@@ -173,6 +173,15 @@ impl Store {
         Ok(changed > 0)
     }
 
+    /// Wipes all learned data (devices, connections, events) — the
+    /// Settings "start over" path. Baselines rebuild from scratch.
+    pub fn clear_all(&self) -> Result<()> {
+        self.conn.execute_batch(
+            "DELETE FROM events; DELETE FROM connections; DELETE FROM devices;",
+        )?;
+        Ok(())
+    }
+
     /// Number of stored devices.
     pub fn device_count(&self) -> Result<i64> {
         Ok(self.conn.query_row("SELECT COUNT(*) FROM devices", [], |row| row.get(0))?)
@@ -425,6 +434,22 @@ mod tests {
         assert_eq!(devices[0].level, Some(PurdueLevel::Control));
         assert_eq!(devices[0].role, DeviceRole::Plc);
         assert_eq!(devices[0].label.as_deref(), Some("Main PLC"));
+    }
+
+    #[test]
+    fn clear_all_wipes_everything() {
+        let store = Store::open_in_memory().unwrap();
+        let plc = Device::new(ip(10, 0, 2, 15), 100);
+        store.add_device(&plc).unwrap();
+        store
+            .record_event(&Event::new(200, EventKind::DeviceDiscovered, "new device"))
+            .unwrap();
+        assert_eq!(store.device_count().unwrap(), 1);
+        assert_eq!(store.event_count().unwrap(), 1);
+        store.clear_all().unwrap();
+        assert_eq!(store.device_count().unwrap(), 0);
+        assert_eq!(store.event_count().unwrap(), 0);
+        assert!(store.list_connections().unwrap().is_empty());
     }
 
     #[test]

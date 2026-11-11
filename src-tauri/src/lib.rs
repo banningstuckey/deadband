@@ -764,7 +764,7 @@ struct PlacementDto {
 }
 
 #[tauri::command]
-fn placement_suggestions(state: State<'_, AppState>) -> Vec<PlacementDto> {
+fn placement_suggestions(state: tauri::State<AppState>) -> Vec<PlacementDto> {
     let store = state.store.lock().unwrap();
     deadband_core::placement::suggestions(&store)
         .unwrap_or_default()
@@ -783,7 +783,7 @@ fn placement_suggestions(state: State<'_, AppState>) -> Vec<PlacementDto> {
 /// Confirm a suggestion: re-infer fresh (behavior may have moved
 /// since the list was drawn) and write the placement back.
 #[tauri::command]
-fn apply_placement(state: State<'_, AppState>, ip: String) -> Result<bool, String> {
+fn apply_placement(state: tauri::State<AppState>, ip: String) -> Result<bool, String> {
     let addr: std::net::IpAddr = ip.parse().map_err(|_| "bad IP address".to_string())?;
     let store = state.store.lock().unwrap();
     match deadband_core::placement::infer(&store, addr)
@@ -794,6 +794,17 @@ fn apply_placement(state: State<'_, AppState>, ip: String) -> Result<bool, Strin
             .map_err(|e| format!("placement failed: {e}")),
         None => Ok(false),
     }
+}
+
+/// Settings → "Clear stored data": wipes the learned database
+/// (devices, connections, events) so baselines rebuild from zero.
+/// The UI demands a two-click confirm before calling this.
+#[tauri::command]
+fn clear_data(state: tauri::State<AppState>) -> Result<bool, String> {
+    let store = state.store.lock().unwrap();
+    store.clear_all().map_err(|e| format!("clear failed: {e}"))?;
+    *state.anomaly_shared.lock().unwrap() = AnomalyStatusDto::default();
+    Ok(true)
 }
 
 pub fn run() {
@@ -835,7 +846,8 @@ pub fn run() {
             analyst_status,
             explain_latest_alert,
             placement_suggestions,
-            apply_placement
+            apply_placement,
+            clear_data
         ])
         .run(tauri::generate_context!())
         .expect("error while running Deadband");
