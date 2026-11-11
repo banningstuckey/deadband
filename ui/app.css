@@ -86,6 +86,10 @@ main {
 .ov-warn { color: var(--md-sys-color-tertiary); }
 .ov-bad { color: var(--md-sys-color-error); }
 .filter-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 8px; }
+/* The flex display above beats the browser's built-in [hidden] rule,
+   so a hidden filter row stayed on screen anyway (the device-filter
+   chip never visually cleared). Same pattern as .view[hidden] below. */
+.filter-row[hidden] { display: none; }
 .chip-btn {
   font: inherit; font-size: 12.5px; padding: 6px 14px; border-radius: 999px; cursor: pointer;
   color: var(--md-sys-color-on-surface-variant);
