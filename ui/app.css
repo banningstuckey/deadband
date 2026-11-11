@@ -316,3 +316,33 @@ select.text-input { max-width: 240px; }
 .heart-svg { width: 220px; height: 30px; }
 .heart-svg polyline { fill: none; stroke: var(--md-sys-color-primary); stroke-width: 1.6; }
 .heart-wrote polyline { stroke: var(--md-sys-color-tertiary); }
+
+/* Dashboards */
+.dash-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; order: 0; }
+.dash-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.dash-tab {
+  font: inherit; font-size: 13px; padding: 7px 16px; border-radius: 999px; cursor: pointer;
+  display: inline-flex; align-items: center;
+  color: var(--md-sys-color-on-surface-variant);
+  background: var(--md-sys-color-surface-container-high);
+  border: 1px solid var(--md-sys-color-outline-variant);
+}
+.dash-tab[selected] {
+  color: var(--md-sys-color-on-primary-container);
+  background: var(--md-sys-color-primary-container);
+  border-color: transparent;
+}
+.dash-badge { width: 9px; height: 9px; border-radius: 50%; background: var(--md-sys-color-error); margin-left: 8px; }
+.dash-del { color: var(--md-sys-color-error); font-weight: 700; }
+.dash-palette { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; order: 1; }
+.dash-palette[hidden] { display: none; }
+#view-live nmui-card { position: relative; }
+#view-live nmui-card.customizing { outline: 1.5px dashed var(--md-sys-color-outline); outline-offset: -6px; cursor: grab; }
+#view-live nmui-card.dragging { opacity: 0.45; }
+.widget-tools {
+  position: absolute; top: 8px; right: 10px; z-index: 5;
+  display: flex; gap: 8px; align-items: center;
+  background: var(--md-sys-color-surface-container-highest);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  padding: 3px 8px; border-radius: 8px; font-size: 12px;
+}

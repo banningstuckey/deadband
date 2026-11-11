@@ -751,6 +751,51 @@ fn network_snapshot(state: tauri::State<AppState>) -> NetworkSnapshot {
 
 /// Builds and runs the Tauri application.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+/// One placement suggestion for the Assets view: Deadband's guess at
+/// what an unplaced device is, with its confidence and receipts.
+#[derive(Serialize)]
+struct PlacementDto {
+    ip: String,
+    role: String,
+    level_label: String,
+    level_name: String,
+    confidence: u8,
+    reasons: Vec<String>,
+}
+
+#[tauri::command]
+fn placement_suggestions(state: State<'_, AppState>) -> Vec<PlacementDto> {
+    let store = state.store.lock().unwrap();
+    deadband_core::placement::suggestions(&store)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(ip, p)| PlacementDto {
+            ip: ip.to_string(),
+            role: p.role.as_tag().to_string(),
+            level_label: p.level.label().to_string(),
+            level_name: p.level.name().to_string(),
+            confidence: p.confidence,
+            reasons: p.reasons,
+        })
+        .collect()
+}
+
+/// Confirm a suggestion: re-infer fresh (behavior may have moved
+/// since the list was drawn) and write the placement back.
+#[tauri::command]
+fn apply_placement(state: State<'_, AppState>, ip: String) -> Result<bool, String> {
+    let addr: std::net::IpAddr = ip.parse().map_err(|_| "bad IP address".to_string())?;
+    let store = state.store.lock().unwrap();
+    match deadband_core::placement::infer(&store, addr)
+        .map_err(|e| format!("inference failed: {e}"))?
+    {
+        Some(p) => store
+            .update_device_placement(addr, p.level, p.role)
+            .map_err(|e| format!("placement failed: {e}")),
+        None => Ok(false),
+    }
+}
+
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
@@ -788,7 +833,9 @@ pub fn run() {
             run_scenario,
             anomaly_status,
             analyst_status,
-            explain_latest_alert
+            explain_latest_alert,
+            placement_suggestions,
+            apply_placement
         ])
         .run(tauri::generate_context!())
         .expect("error while running Deadband");

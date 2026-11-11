@@ -52,7 +52,17 @@
       </div>
 
       <section id="view-live" class="view">
-        <nmui-card outlined class="overview-card">
+        <div class="dash-bar span-all">
+          <div class="dash-tabs" id="dash-tabs"></div>
+          <button class="chip-btn" id="dash-new">+ New dashboard</button>
+          <button class="chip-btn" id="dash-customize">Customize</button>
+        </div>
+        <div class="dash-palette span-all" id="dash-palette" hidden>
+          <span class="stat-label">Add widget:</span>
+          <span id="dash-palette-chips"></span>
+          <span class="dim">Drag cards to reorder · × removes a card (it stays available here)</span>
+        </div>
+        <nmui-card outlined class="overview-card" data-widget="overview">
           <div class="overview-grid">
             <div class="stat"><span class="stat-label">Plant state</span><b id="ov-state">—</b></div>
             <div class="stat"><span class="stat-label">Risk score</span><b id="ov-risk">—</b></div>
@@ -67,7 +77,7 @@
           <p class="dim" id="ov-latest">The 10-second version: state, risk, and the latest alert — the raw detail lives in Events when you want it.</p>
         </nmui-card>
 
-        <nmui-card outlined class="map-card">
+        <nmui-card outlined class="map-card" data-widget="map">
           <h2 class="card-title">Purdue map — live</h2>
           <div class="filter-row">
             <button class="chip-btn" id="map-mode-full" selected>Full map</button>
@@ -84,7 +94,7 @@
           Start the plant from the <strong>Events</strong> view.</p>
         </nmui-card>
 
-        <nmui-card outlined>
+        <nmui-card outlined data-widget="detail">
           <h2 class="card-title" id="detail-title">Detail</h2>
           <div id="detail-body">
             <p>Nothing selected. When traffic flows, devices appear on their Purdue
@@ -93,7 +103,7 @@
           </div>
         </nmui-card>
 
-        <nmui-card outlined>
+        <nmui-card outlined data-widget="engine">
           <h2 class="card-title">Engine status</h2>
           <p id="engine-status">Contacting the Rust core…</p>
           <p class="dim">This line is filled in by the <code>engine_status</code> Tauri command,
@@ -103,32 +113,32 @@
           </div>
         </nmui-card>
 
-        <nmui-card outlined>
+        <nmui-card outlined data-widget="plant">
           <h2 class="card-title">Simulated plant</h2>
           <p>The built-in lab: five virtual devices generating real Modbus/TCP
           frames through the same pipeline a live sensor will feed.</p>
           <ul id="plant-list" class="plant-list"></ul>
         </nmui-card>
 
-        <nmui-card outlined>
+        <nmui-card outlined data-widget="safety">
           <h2 class="card-title">Safety rules</h2>
           <p>Passive only — Deadband reads copies of traffic and never transmits into a monitored network.
           AI warns, never acts. Local first, no cloud. Lab-proven before it goes anywhere near a real plant.</p>
         </nmui-card>
 
-        <nmui-card outlined class="span-all">
+        <nmui-card outlined class="span-all" data-widget="story">
           <h2 class="card-title">Latest incident — storyboard</h2>
           <div id="story-body"><p class="dim">No alerts yet. When something fires, the incident
           is assembled here as a strip of frames — what happened, in order — instead of
           log rows you have to piece together yourself.</p></div>
         </nmui-card>
 
-        <nmui-card outlined class="span-all">
+        <nmui-card outlined class="span-all" data-widget="traj">
           <h2 class="card-title">Trajectory — who is climbing?</h2>
           <div id="traj-body"><p class="dim">No device is climbing toward the controllers right now.</p></div>
         </nmui-card>
 
-        <nmui-card outlined class="span-all">
+        <nmui-card outlined class="span-all" data-widget="heart">
           <h2 class="card-title">Heartbeats — device rhythm</h2>
           <div id="heart-body"><p class="dim">Each device's traffic rhythm as a waveform.
           Steady = healthy polling. Bunched, frantic, or flat = look closer.</p></div>
@@ -202,7 +212,7 @@
             <p class="dim" id="assets-empty">No devices yet — run the simulation or replay a capture.</p>
             <table class="assets-table" id="assets-table" hidden>
               <thead>
-                <tr><th>IP</th><th>Label</th><th>Role</th><th>Purdue level</th><th>First seen</th><th>Last seen</th></tr>
+                <tr><th>IP</th><th>Label</th><th>Role</th><th>Purdue level</th><th>First seen</th><th>Last seen</th><th>Suggested placement</th></tr>
               </thead>
               <tbody id="assets-body"></tbody>
             </table>
@@ -446,6 +456,8 @@
         invoke('rules_status'), invoke('anomaly_status'),
         invoke('network_snapshot'), invoke('recent_events', { limit: 100 }),
       ]);
+      window._alertsTotal = rules.alerts_total;
+      if (window._dashTick) window._dashTick(rules.alerts_total);
       const latestAlert = recent.find((e) => e.kind === 'alert');
       const stateEl = document.getElementById('ov-state');
       const state = anomaly.risk_score >= 50 || rules.alerts_total > 0
@@ -503,49 +515,63 @@
   function renderTraj(recent, snap) {
     const body = document.getElementById('traj-body');
     const levelOf = new Map();
+    const roleOf = new Map();
     snap.devices.forEach((d) => {
       if (d.level_label) levelOf.set(d.ip, parseFloat(d.level_label));
+      roleOf.set(d.ip, d.role);
     });
     const labelOf = new Map(snap.devices.map((d) => [d.ip, d.label || d.ip]));
+    const placed = new Set(snap.devices.filter((d) => d.level_label).map((d) => d.ip));
+    // Requests only: a PLC answering polls is not "moving" anywhere,
+    // and responses arrive as events with the PLC as source.
+    const requests = [...recent]
+      .filter((e) => (e.kind === 'modbus' || e.kind === 'write') && !/response/.test(e.summary))
+      .sort((a, b) => a.timestamp - b.timestamp);
     const bySrc = new Map();
-    [...recent].sort((a, b) => a.timestamp - b.timestamp).forEach((e) => {
+    requests.forEach((e) => {
       if (!e.src_ip || !e.dst_ip || !levelOf.has(e.dst_ip)) return;
+      if (roleOf.get(e.src_ip) === 'plc') return;
       if (!bySrc.has(e.src_ip)) bySrc.set(e.src_ip, []);
       bySrc.get(e.src_ip).push({ t: e.timestamp, lvl: levelOf.get(e.dst_ip) });
     });
-    const climbers = [];
+    const findings = [];
     bySrc.forEach((hits, ip) => {
-      const path = [];
-      hits.forEach((h) => { if (!path.length || path[path.length - 1].lvl !== h.lvl) path.push(h); });
-      const lvls = path.map((p) => p.lvl);
-      const minL = Math.min(...lvls), maxL = Math.max(...lvls);
-      // Climbing = reaching progressively LOWER level numbers over time.
-      let descending = false, tHigh = null, tLow = null;
-      path.forEach((p) => {
-        if (p.lvl === maxL && tHigh === null) tHigh = p.t;
-        if (p.lvl === minL) tLow = p.t;
+      // First-visit order of distinct levels: the shape of the path.
+      const firstVisit = [];
+      const firstAt = new Map();
+      hits.forEach((x) => {
+        if (!firstAt.has(x.lvl)) { firstAt.set(x.lvl, x.t); firstVisit.push(x.lvl); }
       });
-      descending = maxL > minL && tHigh !== null && tLow !== null && tLow > tHigh;
-      if (descending && minL <= 2) climbers.push({ ip, path, minL, maxL, tHigh, tLow });
+      if (firstVisit.length < 2) return;
+      const minL = Math.min(...firstVisit);
+      if (minL > 2) return;
+      const startedHigh = firstVisit[0] > minL;
+      const endedDeep = firstVisit[firstVisit.length - 1] === minL;
+      const pathText = firstVisit.map((l) => 'L' + l).join(' → ');
+      if (startedHigh && endedDeep) {
+        const minutes = Math.max((firstAt.get(minL) - firstAt.get(firstVisit[0])) / 60, 0.1);
+        const crossed = firstVisit[0] - minL;
+        const eta = minL > 1
+          ? ' At that pace it reaches Level 1 in roughly ' + ((minL - 1) / (crossed / minutes)).toFixed(0) + ' min.'
+          : ' It has already reached the control level.';
+        findings.push({ ip, text: 'worked its way down: ' + pathText +
+          ' — crossed ' + crossed + ' level(s) in ~' + minutes.toFixed(1) + ' min.' + eta });
+      } else if (!placed.has(ip) && firstVisit.length >= 3) {
+        findings.push({ ip, text: 'fanned out across ' + pathText +
+          ' in one sweep — a scan pattern, not an operator.' });
+      }
     });
-    if (!climbers.length) {
+    if (!findings.length) {
       body.innerHTML = '<p class="dim">No device is climbing toward the controllers right now.</p>';
       return;
     }
     body.innerHTML = '';
-    climbers.forEach((c) => {
-      const minutes = Math.max((c.tLow - c.tHigh) / 60, 0.1);
-      const crossed = c.maxL - c.minL;
-      const minsToL1 = c.minL > 1 ? ((c.minL - 1) / (crossed / minutes)).toFixed(0) : '0';
+    findings.forEach((f) => {
       const p = document.createElement('p');
-      p.innerHTML = '';
       const strong = document.createElement('strong');
-      strong.textContent = labelOf.get(c.ip) || c.ip;
+      strong.textContent = labelOf.get(f.ip) || f.ip;
       const rest = document.createElement('span');
-      rest.textContent = ' is moving down the levels: ' +
-        c.path.map((x) => 'L' + x.lvl).join(' → ') +
-        ' — crossed ' + crossed + ' level(s) in ~' + minutes.toFixed(1) + ' min.' +
-        (c.minL > 1 ? ' At that pace it reaches Level 1 in roughly ' + minsToL1 + ' min.' : ' It has already reached the control levels.');
+      rest.textContent = ' ' + f.text;
       p.append(strong, rest);
       body.appendChild(p);
     });
@@ -923,6 +949,25 @@
         td.textContent = text;
         tr.appendChild(td);
       });
+      const suggTd = document.createElement('td');
+      const sugg = (window._placements || new Map()).get(d.ip);
+      if (sugg && !d.level_name) {
+        const ROLE_NAMES = { plc: 'PLC', hmi: 'HMI', historian: 'Historian', office_pc: 'Office PC', engineering_station: 'Engineering station', server: 'Server' };
+        const label = document.createElement('span');
+        label.textContent = (ROLE_NAMES[sugg.role] || sugg.role) + ' · Level ' + sugg.level_label +
+          ' (' + sugg.confidence + '%) ';
+        const why = document.createElement('span');
+        why.className = 'dim';
+        why.textContent = sugg.reasons[0] || '';
+        const btn = document.createElement('button');
+        btn.className = 'chip-btn';
+        btn.textContent = 'Place it';
+        btn.setAttribute('data-apply-placement', d.ip);
+        suggTd.append(label, why, document.createElement('br'), btn);
+      } else {
+        suggTd.textContent = d.level_name ? 'placed' : '—';
+      }
+      tr.appendChild(suggTd);
       body.appendChild(tr);
     });
     table.hidden = devices.length === 0;
@@ -1038,6 +1083,203 @@
     baselineSet = new Set(snapshot.devices.map((d) => d.ip));
     renderMap();
   });
+
+  // ---- placement suggestions (Assets view) --------------------------------
+  async function loadPlacements() {
+    if (!invoke) return;
+    try {
+      const list = await invoke('placement_suggestions');
+      window._placements = new Map(list.map((p) => [p.ip, p]));
+      renderAssets();
+    } catch (err) { /* best-effort */ }
+  }
+  loadPlacements();
+  setInterval(loadPlacements, 10000);
+  const assetsBody = document.getElementById('assets-body');
+  if (assetsBody) assetsBody.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-apply-placement]');
+    if (!btn || !invoke) return;
+    try {
+      await invoke('apply_placement', { ip: btn.getAttribute('data-apply-placement') });
+      await loadPlacements();
+      await refreshMap();
+    } catch (err) { /* best-effort */ }
+  });
+
+  // ---- dashboards: tabbed, rearrangeable widget boards over the Live view --
+  const WIDGET_NAMES = {
+    overview: 'Overview + gauge', map: 'Purdue map', detail: 'Detail panel',
+    engine: 'Engine status', plant: 'Simulated plant', safety: 'Safety rules',
+    story: 'Incident storyboard', traj: 'Trajectory', heart: 'Heartbeats',
+  };
+  const WIDGET_IDS = Object.keys(WIDGET_NAMES);
+  const DASH_KEY = 'deadband.dashboards.v1';
+  function defaultDashboards() {
+    return [
+      { id: 'main', name: 'Overview', widgets: ['overview', 'map', 'detail', 'story', 'traj', 'heart'], seen: 0 },
+      { id: 'plant', name: 'Plant', widgets: ['map', 'plant', 'engine', 'safety', 'detail'], seen: 0 },
+      { id: 'incidents', name: 'Incidents', widgets: ['overview', 'story', 'traj'], seen: 0 },
+    ];
+  }
+  let dashboards = defaultDashboards();
+  let activeDash = 'main';
+  try {
+    const saved = JSON.parse(localStorage.getItem(DASH_KEY) || 'null');
+    if (saved && Array.isArray(saved.dashboards) && saved.dashboards.length) {
+      dashboards = saved.dashboards;
+      activeDash = saved.activeDash || dashboards[0].id;
+    }
+  } catch (err) { /* fall back to defaults */ }
+  let customizing = false;
+  const currentDash = () => dashboards.find((d) => d.id === activeDash) || dashboards[0];
+  const widgetEl = (id) => document.querySelector('#view-live [data-widget="' + id + '"]');
+  function saveDashboards() {
+    try { localStorage.setItem(DASH_KEY, JSON.stringify({ dashboards, activeDash })); } catch (err) {}
+  }
+  function renderTabs() {
+    const wrap = document.getElementById('dash-tabs');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    dashboards.forEach((d) => {
+      const tab = document.createElement('button');
+      tab.className = 'dash-tab';
+      if (d.id === activeDash) tab.setAttribute('selected', '');
+      const name = document.createElement('span');
+      name.textContent = d.name;
+      tab.appendChild(name);
+      const unseen = (window._alertsTotal || 0) > (d.seen || 0);
+      if (unseen && d.id !== activeDash) {
+        const badge = document.createElement('span');
+        badge.className = 'dash-badge';
+        badge.title = 'New alerts on this dashboard';
+        tab.appendChild(badge);
+      }
+      if (customizing && dashboards.length > 1) {
+        const del = document.createElement('span');
+        del.className = 'dash-del';
+        del.textContent = ' ×';
+        del.title = 'Delete dashboard';
+        del.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          dashboards = dashboards.filter((x) => x.id !== d.id);
+          if (activeDash === d.id) activeDash = dashboards[0].id;
+          saveDashboards(); applyDashboard();
+        });
+        tab.appendChild(del);
+      }
+      tab.addEventListener('click', () => {
+        activeDash = d.id;
+        d.seen = window._alertsTotal || 0;
+        saveDashboards(); applyDashboard();
+      });
+      wrap.appendChild(tab);
+    });
+  }
+  function renderPalette() {
+    const chips = document.getElementById('dash-palette-chips');
+    if (!chips) return;
+    chips.innerHTML = '';
+    const d = currentDash();
+    WIDGET_IDS.filter((id) => !d.widgets.includes(id)).forEach((id) => {
+      const chip = document.createElement('button');
+      chip.className = 'chip-btn';
+      chip.textContent = '+ ' + WIDGET_NAMES[id];
+      chip.addEventListener('click', () => {
+        d.widgets.push(id);
+        saveDashboards(); applyDashboard();
+      });
+      chips.appendChild(chip);
+    });
+  }
+  function applyDashboard() {
+    const d = currentDash();
+    WIDGET_IDS.forEach((id) => {
+      const el = widgetEl(id);
+      if (!el) return;
+      const idx = d.widgets.indexOf(id);
+      el.style.display = idx >= 0 ? '' : 'none';
+      el.style.order = idx >= 0 ? String(idx + 2) : '99';
+      el.classList.toggle('span-all', idx >= 0 && (id === 'story' || id === 'traj' || id === 'heart' || id === 'overview'));
+    });
+    renderTabs();
+    renderPalette();
+  }
+  window._dashTick = (total) => {
+    window._alertsTotal = total;
+    const d = currentDash();
+    if (d) d.seen = total;
+    renderTabs();
+  };
+  const dashNew = document.getElementById('dash-new');
+  if (dashNew) dashNew.addEventListener('click', () => {
+    const d = { id: 'd' + Date.now(), name: 'Dashboard ' + (dashboards.length + 1),
+      widgets: ['overview', 'map'], seen: window._alertsTotal || 0 };
+    dashboards.push(d);
+    activeDash = d.id;
+    saveDashboards(); applyDashboard();
+  });
+  const dashCust = document.getElementById('dash-customize');
+  function setCustomizing(on) {
+    customizing = on;
+    if (dashCust) dashCust.toggleAttribute('selected', on);
+    const palette = document.getElementById('dash-palette');
+    if (palette) palette.hidden = !on;
+    const d = currentDash();
+    d.widgets.forEach((id) => {
+      const el = widgetEl(id);
+      if (!el) return;
+      el.draggable = on;
+      el.classList.toggle('customizing', on);
+      let tools = el.querySelector('.widget-tools');
+      if (on && !tools) {
+        tools = document.createElement('div');
+        tools.className = 'widget-tools';
+        const grip = document.createElement('span');
+        grip.textContent = '⠿ drag';
+        const x = document.createElement('button');
+        x.className = 'chip-btn';
+        x.textContent = '×';
+        x.title = 'Remove from this dashboard';
+        x.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          d.widgets = d.widgets.filter((w) => w !== id);
+          saveDashboards(); applyDashboard(); setCustomizing(true);
+        });
+        tools.append(grip, x);
+        el.appendChild(tools);
+      } else if (!on && tools) {
+        tools.remove();
+      }
+    });
+    renderTabs();
+  }
+  if (dashCust) dashCust.addEventListener('click', () => setCustomizing(!customizing));
+  // Drag to reorder within the active dashboard.
+  let dragId = null;
+  document.querySelectorAll('#view-live [data-widget]').forEach((el) => {
+    el.addEventListener('dragstart', (e) => {
+      if (!customizing) return;
+      dragId = el.getAttribute('data-widget');
+      el.classList.add('dragging');
+      try { e.dataTransfer.setData('text/plain', dragId); } catch (err) {}
+    });
+    el.addEventListener('dragend', () => el.classList.remove('dragging'));
+    el.addEventListener('dragover', (e) => { if (customizing && dragId) e.preventDefault(); });
+    el.addEventListener('drop', (e) => {
+      if (!customizing || !dragId) return;
+      e.preventDefault();
+      const targetId = el.getAttribute('data-widget');
+      const d = currentDash();
+      const from = d.widgets.indexOf(dragId);
+      const to = d.widgets.indexOf(targetId);
+      if (from < 0 || to < 0 || from === to) return;
+      d.widgets.splice(from, 1);
+      d.widgets.splice(to, 0, dragId);
+      dragId = null;
+      saveDashboards(); applyDashboard(); setCustomizing(true);
+    });
+  });
+  applyDashboard();
 
   (async () => {
     renderMap();

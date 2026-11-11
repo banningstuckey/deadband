@@ -157,6 +157,22 @@ impl Store {
         Ok(devices)
     }
 
+    /// Writes a confirmed placement (level + role) for a device —
+    /// the human-confirmed half of the placement inference loop.
+    /// Returns false if the IP is unknown.
+    pub fn update_device_placement(
+        &self,
+        ip: std::net::IpAddr,
+        level: crate::model::PurdueLevel,
+        role: crate::model::DeviceRole,
+    ) -> Result<bool> {
+        let changed = self.conn.execute(
+            "UPDATE devices SET level = ?2, role = ?3 WHERE ip = ?1",
+            params![ip.to_string(), level.label(), role.as_tag()],
+        )?;
+        Ok(changed > 0)
+    }
+
     /// Number of stored devices.
     pub fn device_count(&self) -> Result<i64> {
         Ok(self.conn.query_row("SELECT COUNT(*) FROM devices", [], |row| row.get(0))?)

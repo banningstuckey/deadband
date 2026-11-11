@@ -38,6 +38,7 @@ pub mod engine;
 pub mod model;
 pub mod parse;
 pub mod pcap;
+pub mod placement;
 pub mod sample;
 pub mod scenarios;
 pub mod sim;
