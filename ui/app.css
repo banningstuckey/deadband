@@ -117,6 +117,25 @@ main {
 .query-ai { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 4px 0 8px; }
 .query-ai[hidden] { display: none; }
 .query-ai .query-input { flex: 1 1 320px; min-width: 240px; }
+
+/* Menu check marks: nmui-menu marks the selected item with
+   <icon class="check">check</icon> — a Material Symbols ligature.
+   Deadband is local-first and ships no icon font, so the ligature
+   renders as the literal word "check". Until the font is self-hosted,
+   hide the ligature text and draw a plain checkmark instead. */
+nmui-menu > button > icon.check,
+nmui-menu > section > button > icon.check {
+  font-size: 0;
+  width: 24px;
+  text-align: center;
+}
+nmui-menu > button > icon.check::before,
+nmui-menu > section > button > icon.check::before {
+  content: "\2713";
+  font-size: 20px;
+  font-family: system-ui, sans-serif;
+  color: var(--md-sys-color-on-surface-variant, #49454f);
+}
 .chip-btn {
   font: inherit; font-size: 12.5px; padding: 6px 14px; border-radius: 999px; cursor: pointer;
   color: var(--md-sys-color-on-surface-variant);

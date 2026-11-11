@@ -447,6 +447,7 @@
       const b = document.createElement('button');
       b.setAttribute('value', value);
       b.textContent = label;
+      b.dataset.label = label;
       if (value === current) b.setAttribute('selected', '');
       menu.appendChild(b);
     });
@@ -458,7 +459,7 @@
     field.addEventListener('click', () => menu.toggle());
     menu.addEventListener('change', (e) => {
       const item = menu.querySelector('button[value="' + e.detail.value + '"]');
-      if (item) setMenuField(fieldId, item.textContent.trim());
+      if (item) setMenuField(fieldId, item.dataset.label || item.textContent.trim());
       onPick(e.detail.value);
     });
   }
