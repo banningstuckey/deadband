@@ -25,8 +25,6 @@ use std::net::IpAddr;
 
 use rusqlite::types::Value;
 
-use crate::model::Event;
-use crate::store::{Result, Store};
 
 /// One parsed query: every term must match (AND), except negated
 /// terms, which must NOT match.
@@ -281,6 +279,7 @@ impl Query {
 mod tests {
     use super::*;
     use crate::model::{EventKind, Event};
+    use crate::store::Store;
     use std::net::{IpAddr, Ipv4Addr};
 
     fn ip(a: u8, b: u8, c: u8, d: u8) -> IpAddr {

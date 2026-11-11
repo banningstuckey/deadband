@@ -5,6 +5,7 @@
 //! monitoring logic lives in `deadband-core` so it can be tested
 //! without a UI and reused by a future headless sensor.
 
+use deadband_core::analyst::AnalystClient;
 use deadband_core::model::{Event, EventKind};
 use deadband_core::source::{SimulatedSource, TrafficSource};
 use deadband_core::store::Store;
@@ -725,24 +726,24 @@ async fn translate_query(
             .collect::<Vec<_>>()
             .join(", ");
         let prompt = format!(
-            "Translate a plain-English log question into a Deadband log query. Reply with ONLY the query, nothing else.
+            r#"Translate a plain-English log question into a Deadband log query. Reply with ONLY the query, nothing else.
 
-             Grammar (space-separated terms, all must match):
-             kind:alert|write|read|discovery|connection|packet|analyst
-             src:<ip> dst:<ip> ip:<ip> (ip = either side)
-             text:<words> (substring of the event summary; text:"quoted phrase" for phrases)
-             last:30m|1h|24h|7d (relative time window)
-             ! before a term negates it: src:!10.0.2.10
-             A bare word searches the summary text.
+Grammar (space-separated terms, all must match):
+kind:alert|write|read|discovery|connection|packet|analyst
+src:<ip> dst:<ip> ip:<ip> (ip = either side)
+text:<words> (substring of the event summary; text:"quoted phrase" for phrases)
+last:30m|1h|24h|7d (relative time window)
+! before a term negates it: src:!10.0.2.10
+A bare word searches the summary text.
 
-             Known devices (label=IP): {roster}
+Known devices (label=IP): {roster}
 
-             Examples:
-             "alerts in the last hour" -> kind:alert last:1h
-             "writes to Line 1 PLC" -> kind:write dst:10.0.1.11
-             "everything from the HMI that is not a read" -> src:10.0.2.10 !kind:read
+Examples:
+"alerts in the last hour" -> kind:alert last:1h
+"writes to Line 1 PLC" -> kind:write dst:10.0.1.11
+"everything from the HMI that is not a read" -> src:10.0.2.10 !kind:read
 
-             Question: {question}"
+Question: {question}"#
         );
         let client = OllamaClient { model: model.clone() };
         let raw = client
@@ -753,7 +754,7 @@ async fn translate_query(
             .map(str::trim)
             .find(|line| !line.is_empty())
             .unwrap_or("")
-            .trim_matches(|c| c == '`' || c == '"' || c == ''')
+            .trim_matches(|c| c == '`' || c == '"' || c == '\'')
             .trim()
             .to_string();
         let now_s = now_ms() / 1000;
