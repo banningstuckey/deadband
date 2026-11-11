@@ -242,7 +242,7 @@ nmui-navigation[rail][collapsed] > destinations :is(a, button):hover { backgroun
 nmui-navigation[rail][collapsed] > destinations :is(a, button)[selected] { background: var(--md-sys-color-secondary-container); border-radius: 999px; }
 nmui-navigation[rail][collapsed] > destinations :is(a, button) { height: 44px; }
 nmui-navigation[rail][collapsed] > destinations :is(a, button) > label {
-  position: static; width: auto; text-align: left; padding-inline-start: 8px;
+  position: static; width: 100%; text-align: center; padding-inline-start: 0;
 }
 
 .phase-tag {
