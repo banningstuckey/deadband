@@ -1,0 +1,47 @@
+/* Warm Light — an app-local Deadband theme (not part of the vendored nmui pin).
+   Warm off-white surfaces with copper and teal — the Deadband mark translated into a light theme.
+   Selected via <html theme="warm-light"> from Settings. */
+
+:root[theme="warm-light"] {
+  --md-sys-color-primary: #9a3f0d;
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-primary-container: #ffdfca;
+  --md-sys-color-on-primary-container: #5c2403;
+  --md-sys-color-secondary: #6d5b3e;
+  --md-sys-color-on-secondary: #ffffff;
+  --md-sys-color-secondary-container: #eee3cf;
+  --md-sys-color-on-secondary-container: #332815;
+  --md-sys-color-tertiary: #00626b;
+  --md-sys-color-on-tertiary: #ffffff;
+  --md-sys-color-tertiary-container: #c9f2f5;
+  --md-sys-color-on-tertiary-container: #00343a;
+  --md-sys-color-error: #b42318;
+  --md-sys-color-on-error: #ffffff;
+  --md-sys-color-error-container: #fee4e2;
+  --md-sys-color-on-error-container: #7a271a;
+  --md-sys-color-surface: #fffaf3;
+  --md-sys-color-on-surface: #21170f;
+  --md-sys-color-surface-variant: #f3e7d7;
+  --md-sys-color-on-surface-variant: #574638;
+  --md-sys-color-surface-container-lowest: #fffdf9;
+  --md-sys-color-surface-container-low: #fff6ea;
+  --md-sys-color-surface-container: #fffaf3;
+  --md-sys-color-surface-container-high: #f7ead8;
+  --md-sys-color-surface-container-highest: #eeddc4;
+  --md-sys-color-inverse-surface: #21170f;
+  --md-sys-color-inverse-on-surface: #ffffff;
+  --md-sys-color-inverse-primary: #fb923c;
+  --md-sys-color-outline: #8a7460;
+  --md-sys-color-outline-variant: #dccbb6;
+  --md-sys-color-background: #fbf4e8;
+  --md-sys-color-on-background: #21170f;
+  --md-sys-color-shadow: #000000;
+  --md-sys-color-scrim: #000000;
+  --md-sys-shape-corner-none: 0;
+  --md-sys-shape-corner-extra-small: 4px;
+  --md-sys-shape-corner-small: 8px;
+  --md-sys-shape-corner-medium: 12px;
+  --md-sys-shape-corner-large: 16px;
+  --md-sys-shape-corner-extra-large: 24px;
+  --md-sys-shape-corner-full: 999px;
+}

@@ -3,6 +3,10 @@
    places things. */
 
 :root { color-scheme: dark; }
+:root[theme="paper-white"],
+:root[theme="daylight-steel"],
+:root[theme="warm-light"],
+:root[theme="contrast-paper"] { color-scheme: light; }
 
 * { box-sizing: border-box; }
 
@@ -102,13 +106,32 @@ main {
 @media (max-width: 900px) {
   #view-live [data-widget] { grid-column: 1 / -1 !important; }
 }
-.widget-resize {
-  position: absolute; right: 5px; bottom: 5px; width: 18px; height: 18px; z-index: 6;
-  cursor: nwse-resize; touch-action: none;
-  border-right: 2.5px solid var(--md-sys-color-outline);
-  border-bottom: 2.5px solid var(--md-sys-color-outline);
-  border-bottom-right-radius: 6px; opacity: 0.75;
+/* Resize handles: all four corners + all four sides (customize mode).
+   The transparent strips/boxes are the grab areas; the centered arrow
+   chip is visible on every side and corner. */
+.rz {
+  position: absolute; z-index: 7; touch-action: none;
+  display: flex; align-items: center; justify-content: center;
 }
+.rz-arrow {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 22px; height: 22px; padding: 0 3px; box-sizing: border-box;
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: 999px;
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface);
+  font-size: 13px; font-weight: 700; line-height: 1;
+  pointer-events: none; user-select: none;
+}
+.rz-n { top: -11px; left: 26px; right: 26px; height: 22px; cursor: ns-resize; }
+.rz-s { bottom: -11px; left: 26px; right: 26px; height: 22px; cursor: ns-resize; }
+.rz-e { right: -11px; top: 26px; bottom: 26px; width: 22px; cursor: ew-resize; }
+.rz-w { left: -11px; top: 26px; bottom: 26px; width: 22px; cursor: ew-resize; }
+.rz-ne, .rz-nw, .rz-se, .rz-sw { width: 24px; height: 24px; }
+.rz-ne { top: -11px; right: -11px; cursor: nesw-resize; }
+.rz-nw { top: -11px; left: -11px; cursor: nwse-resize; }
+.rz-se { bottom: -11px; right: -11px; cursor: nwse-resize; }
+.rz-sw { bottom: -11px; left: -11px; cursor: nesw-resize; }
 #view-live .card-title { cursor: grab; }
 
 @media (min-width: 1500px) {
@@ -165,6 +188,17 @@ ol.levels li span { color: var(--md-sys-color-on-surface-variant); }
   background-position: 50.17% 91.74%;
   background-repeat: no-repeat;
   mix-blend-mode: screen;
+}
+/* The supplied brand art is on black. In the light themes, keep it on
+   a small black plaque rather than letting screen blending wash it
+   out against a white rail. */
+:root[theme="paper-white"] .rail-brand-row,
+:root[theme="daylight-steel"] .rail-brand-row,
+:root[theme="warm-light"] .rail-brand-row,
+:root[theme="contrast-paper"] .rail-brand-row {
+  background: #050505;
+  border-radius: 10px;
+  padding: 4px 6px 4px 0;
 }
 
 footer.note { color: var(--md-sys-color-on-surface-variant); font-size: 12px; }
@@ -326,11 +360,24 @@ select.text-input { max-width: 240px; }
 .frame-write { border-color: var(--md-sys-color-tertiary); }
 .frame-time { font-size: 11px; color: var(--md-sys-color-on-surface-variant); }
 .frame-arrow { align-self: center; color: var(--md-sys-color-on-surface-variant); }
-.heart-row { display: flex; align-items: center; gap: 14px; padding: 3px 0; }
+.heart-row { display: flex; align-items: center; gap: 14px; padding: 3px 0; flex-wrap: wrap; }
 .heart-name { min-width: 190px; font-size: 12.5px; }
-.heart-svg { width: 220px; height: 30px; }
-.heart-svg polyline { fill: none; stroke: var(--md-sys-color-primary); stroke-width: 1.6; }
+.heart-svg { width: 220px; height: 30px; flex: 0 0 auto; }
+.heart-svg polyline { fill: none; stroke: var(--md-sys-color-primary); stroke-width: 1.6; pointer-events: none; }
 .heart-wrote polyline { stroke: var(--md-sys-color-tertiary); }
+.heart-hit { fill: transparent; pointer-events: all; cursor: crosshair; }
+.heart-marker { fill: var(--md-sys-color-surface); stroke: var(--md-sys-color-primary); stroke-width: 2; pointer-events: none; }
+.heart-wrote .heart-marker { stroke: var(--md-sys-color-tertiary); }
+.heart-value {
+  min-width: 245px; font-size: 12.5px;
+  color: var(--md-sys-color-on-surface-variant);
+  font-variant-numeric: tabular-nums;
+}
+.heart-readout {
+  margin-top: 8px; min-height: 1.35em; font-size: 12.5px;
+  color: var(--md-sys-color-on-surface-variant);
+  font-variant-numeric: tabular-nums;
+}
 
 /* Dashboards */
 .dash-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; order: 0; }

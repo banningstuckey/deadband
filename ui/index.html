@@ -12,6 +12,12 @@
 <link rel="stylesheet" href="./themes/midnight-steel.css">
 <link rel="stylesheet" href="./themes/console-green.css">
 <link rel="stylesheet" href="./themes/ember-dark.css">
+<link rel="stylesheet" href="./themes/paper-white.css">
+<link rel="stylesheet" href="./themes/daylight-steel.css">
+<link rel="stylesheet" href="./themes/warm-light.css">
+<link rel="stylesheet" href="./themes/contrast-noir.css">
+<link rel="stylesheet" href="./themes/contrast-paper.css">
+<link rel="stylesheet" href="./themes/contrast-amber.css">
 <script>try { document.documentElement.setAttribute('theme', localStorage.getItem('deadband.theme') || 'deadband-industrial'); } catch (e) {}</script>
 <link rel="stylesheet" href="./vendor/nmui/components/navigation/navigation.css">
 <link rel="stylesheet" href="./vendor/nmui/components/button/button.css">
@@ -63,12 +69,13 @@
           <button class="chip-btn" id="dash-new">+ New dashboard</button>
           <button class="chip-btn" id="dash-customize">Customize</button>
           <button class="chip-btn" id="dash-cancel" hidden>Cancel</button>
+          <button class="chip-btn" id="dash-delete" hidden>Delete this dashboard</button>
           <span class="dim" id="dash-desc"></span>
         </div>
         <div class="dash-palette span-all" id="dash-palette" hidden>
           <span class="stat-label">Add widget:</span>
           <span id="dash-palette-chips"></span>
-          <span class="dim">Drag by the title bar to reorder · drag the corner handle to resize (snaps to the 12-column grid) · × removes a card · Save keeps it, Cancel undoes</span>
+          <span class="dim">Drag by the title bar to reorder · drag any corner or side to resize (width snaps to the 12-column grid) · × removes a card · Save keeps it, Cancel undoes</span>
         </div>
         <nmui-card outlined class="overview-card" data-widget="overview">
           <div class="overview-grid">
@@ -150,6 +157,7 @@
           <h2 class="card-title">Heartbeats — device rhythm</h2>
           <div id="heart-body"><p class="dim">Each device's traffic rhythm as a waveform.
           Steady = healthy polling. Bunched, frantic, or flat = look closer.</p></div>
+          <div id="heart-readout" class="heart-readout" aria-live="polite">Hover any point on a heartbeat to see its event count, write count, and time slice.</div>
         </nmui-card>
       </section>
 
@@ -288,6 +296,12 @@
               <option value="midnight-steel">Midnight Steel — deep navy, soft blue, rounder</option>
               <option value="console-green">Console Green — terminal green on black</option>
               <option value="ember-dark">Ember Dark — warm charcoal, ember and copper</option>
+              <option value="paper-white">Paper White — clean white, ink text, steel blue</option>
+              <option value="daylight-steel">Daylight Steel — pale blue-gray, deep blue and teal</option>
+              <option value="warm-light">Warm Light — warm off-white, copper and teal</option>
+              <option value="contrast-noir">High Contrast Noir — black, white, yellow and cyan</option>
+              <option value="contrast-paper">High Contrast Paper — white, black, blue and violet</option>
+              <option value="contrast-amber">High Contrast Amber — black, amber, white and cyan</option>
             </select>
           </div>
           <div class="setting-row">
@@ -638,35 +652,94 @@
 
   function renderHearts(recent, snap) {
     const body = document.getElementById('heart-body');
+    const readout = document.getElementById('heart-readout');
     if (!recent.length || !snap.devices.length) return;
     const tMax = Math.max(...recent.map((e) => e.timestamp));
-    const BINS = 24, span = Math.max(tMax - Math.min(...recent.map((e) => e.timestamp)), 1);
+    const tMin = Math.min(...recent.map((e) => e.timestamp));
+    const BINS = 24, span = Math.max(tMax - tMin, 1);
+    const slice = span / BINS;
     body.innerHTML = '';
     snap.devices.forEach((d) => {
       const bins = new Array(BINS).fill(0);
+      const writeBins = new Array(BINS).fill(0);
       let wrote = false;
       recent.forEach((e) => {
         if (e.src_ip === d.ip || e.dst_ip === d.ip) {
           const idx = Math.min(BINS - 1, Math.floor((e.timestamp - (tMax - span)) / span * BINS));
-          if (idx >= 0) bins[idx] += 1;
+          if (idx >= 0) {
+            bins[idx] += 1;
+            if (e.kind === 'write' && e.src_ip === d.ip) writeBins[idx] += 1;
+          }
           if (e.kind === 'write' && e.src_ip === d.ip) wrote = true;
         }
       });
       const max = Math.max(...bins, 1);
+      const total = bins.reduce((sum, v) => sum + v, 0);
+      const totalWrites = writeBins.reduce((sum, v) => sum + v, 0);
+      const deviceName = d.label || d.ip;
+      const defaultValue = total + (total === 1 ? ' event' : ' events') +
+        ' · ' + totalWrites + (totalWrites === 1 ? ' write' : ' writes') +
+        ' · peak ' + max + ' per slice';
       const pts = bins.map((v, i) =>
         (i / (BINS - 1) * 220).toFixed(1) + ',' + (26 - v / max * 22).toFixed(1)).join(' ');
       const row = document.createElement('div');
       row.className = 'heart-row';
       const name = document.createElement('span');
       name.className = 'heart-name';
-      name.textContent = (d.label || d.ip) + (wrote ? ' · wrote' : '');
+      name.textContent = deviceName + (wrote ? ' · wrote' : '');
       const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       svg.setAttribute('viewBox', '0 0 220 30');
       svg.setAttribute('class', 'heart-svg' + (wrote ? ' heart-wrote' : ''));
+      svg.setAttribute('role', 'img');
+      svg.setAttribute('aria-label', deviceName + ' heartbeat: ' + defaultValue + '.');
       const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
       line.setAttribute('points', pts);
       svg.appendChild(line);
-      row.append(name, svg);
+
+      const value = document.createElement('span');
+      value.className = 'heart-value';
+      value.textContent = defaultValue;
+
+      const marker = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      marker.setAttribute('class', 'heart-marker');
+      marker.setAttribute('r', '3.6');
+      marker.style.display = 'none';
+
+      bins.forEach((count, i) => {
+        const x = i / (BINS - 1) * 220;
+        const y = 26 - count / max * 22;
+        const start = tMin + i * slice;
+        const end = start + slice;
+        const hit = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        hit.setAttribute('x', (i / BINS * 220).toFixed(1));
+        hit.setAttribute('y', '0');
+        hit.setAttribute('width', (220 / BINS).toFixed(1));
+        hit.setAttribute('height', '30');
+        hit.setAttribute('class', 'heart-hit');
+        const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+        title.textContent = deviceName + ': ' + count + (count === 1 ? ' event' : ' events') +
+          ', ' + writeBins[i] + (writeBins[i] === 1 ? ' write' : ' writes') +
+          ', ' + fmtTime(start) + '–' + fmtTime(end);
+        hit.appendChild(title);
+        hit.addEventListener('pointerenter', () => {
+          const detail = count + (count === 1 ? ' event' : ' events') +
+            ' · ' + writeBins[i] + (writeBins[i] === 1 ? ' write' : ' writes') +
+            ' · ' + fmtTime(start) + '–' + fmtTime(end);
+          value.textContent = detail;
+          if (readout) readout.textContent = deviceName + ' — ' + detail + '.';
+          marker.setAttribute('cx', x.toFixed(1));
+          marker.setAttribute('cy', y.toFixed(1));
+          marker.style.display = '';
+        });
+        svg.appendChild(hit);
+      });
+      svg.appendChild(marker);
+      svg.addEventListener('pointerleave', () => {
+        value.textContent = defaultValue;
+        marker.style.display = 'none';
+        if (readout) readout.textContent = 'Hover any point on a heartbeat to see its event count, write count, and time slice.';
+      });
+      row.append(name, svg, value);
       body.appendChild(row);
     });
   }
@@ -1218,45 +1291,79 @@
   function saveDashboards() {
     try { localStorage.setItem(DASH_KEY, JSON.stringify({ dashboards, activeDash })); } catch (err) {}
   }
-  const dashTabsEl = document.getElementById('dash-tabs');
-  let lastTabSig = '';
-  function renderTabs() {
-    if (!dashTabsEl) return;
-    const sig = dashboards.map((d) => d.id + ':' + d.name + ':' +
-      ((window._alertsTotal || 0) > (d.seen || 0) && d.id !== activeDash ? '!' : '')).join('|') +
-      '#' + activeDash + (customizing ? '#c' : '');
-    if (sig === lastTabSig) return;
-    lastTabSig = sig;
-    dashTabsEl.innerHTML = '';
-    dashboards.forEach((d) => {
-      const tab = document.createElement('button');
-      tab.setAttribute('value', d.id);
-      if (d.id === activeDash) tab.setAttribute('selected', '');
-      tab.textContent = d.name;
-      const unseen = (window._alertsTotal || 0) > (d.seen || 0);
-      if (unseen && d.id !== activeDash) {
-        const badge = document.createElement('nmui-badge');
-        badge.setAttribute('aria-label', 'New alerts on this dashboard');
-        tab.appendChild(badge);
-      }
-      if (customizing && dashboards.length > 1) {
-        const del = document.createElement('span');
-        del.className = 'dash-del';
-        del.textContent = ' ×';
-        del.title = 'Delete dashboard';
-        del.addEventListener('click', (ev) => {
-          ev.stopPropagation();
-          dashboards = dashboards.filter((x) => x.id !== d.id);
-          if (activeDash === d.id) activeDash = dashboards[0].id;
-          applyDashboard(); refreshChrome();
-        });
-        tab.appendChild(del);
-      }
-      dashTabsEl.appendChild(tab);
-    });
+  const dashBar = document.querySelector('.dash-bar');
+  let dashTabsEl = document.getElementById('dash-tabs');
+  let tabsStructureKey = '';
+  const tabsStructure = () => dashboards.map((d) => d.id).join('|');
+  function syncTabButton(tab, d) {
+    tab.setAttribute('value', d.id);
+    let nameEl = tab.querySelector('.dash-tab-name');
+    if (!nameEl) {
+      nameEl = document.createElement('span');
+      nameEl.className = 'dash-tab-name';
+      tab.appendChild(nameEl);
+    }
+    if (nameEl.textContent !== d.name) nameEl.textContent = d.name;
+    if (d.id === activeDash) tab.setAttribute('selected', '');
+    else tab.removeAttribute('selected');
+    const unseen = (window._alertsTotal || 0) > (d.seen || 0) && d.id !== activeDash;
+    let badge = tab.querySelector(':scope > nmui-badge');
+    if (unseen && !badge) {
+      badge = document.createElement('nmui-badge');
+      badge.setAttribute('aria-label', 'New alerts on this dashboard');
+      tab.appendChild(badge);
+    } else if (!unseen && badge) {
+      badge.remove();
+    }
   }
-  if (dashTabsEl) dashTabsEl.addEventListener('change', (e) => {
-    const id = e.detail && e.detail.value;
+  function makeTabButton(d) {
+    const tab = document.createElement('button');
+    syncTabButton(tab, d);
+    return tab;
+  }
+  // <nmui-tabs> snapshots and wires its buttons when it connects.
+  // Selection/customize updates therefore happen in place and never
+  // replace those button nodes. The one exception is a change to the
+  // SET of dashboards (add/delete): then the whole tabs element is
+  // replaced, with every button already inside it before insertion,
+  // so the new component connects once and wires the complete set.
+  function rebuildTabsHost() {
+    if (!dashTabsEl) return;
+    const fresh = document.createElement('nmui-tabs');
+    fresh.id = 'dash-tabs';
+    dashboards.forEach((d) => fresh.appendChild(makeTabButton(d)));
+    dashTabsEl.replaceWith(fresh);
+    dashTabsEl = fresh;
+    tabsStructureKey = tabsStructure();
+  }
+  function renderTabs() {
+    if (!dashTabsEl || !dashTabsEl.isConnected) dashTabsEl = document.getElementById('dash-tabs');
+    if (!dashTabsEl) return;
+    const structure = tabsStructure();
+    if (tabsStructureKey && structure !== tabsStructureKey &&
+        window.customElements && customElements.get('nmui-tabs')) {
+      rebuildTabsHost();
+    } else {
+      const seen = new Set();
+      dashboards.forEach((d) => {
+        seen.add(d.id);
+        let tab = dashTabsEl.querySelector('button[value="' + d.id + '"]');
+        if (!tab) {
+          tab = makeTabButton(d);
+          dashTabsEl.appendChild(tab);
+        } else {
+          syncTabButton(tab, d);
+        }
+      });
+      [...dashTabsEl.querySelectorAll('button[value]')].forEach((tab) => {
+        if (!seen.has(tab.getAttribute('value'))) tab.remove();
+      });
+      tabsStructureKey = structure;
+    }
+    const del = document.getElementById('dash-delete');
+    if (del) del.hidden = !(customizing && dashboards.length > 1);
+  }
+  function selectDashboard(id) {
     const d = dashboards.find((x) => x.id === id);
     if (!d) return;
     activeDash = d.id;
@@ -1264,7 +1371,28 @@
     saveDashboards();
     applyDashboard();
     if (customizing) refreshChrome();
-  });
+  }
+  if (dashBar) {
+    dashBar.addEventListener('change', (e) => {
+      if (!e.target || e.target.id !== 'dash-tabs') return;
+      selectDashboard(e.detail && e.detail.value);
+    });
+    // Safety net for a tab added after <nmui-tabs> connected: the
+    // component cannot know that button exists, so if its normal
+    // change event has not selected it by the end of the click,
+    // select it here. Wired tabs select synchronously and this no-ops.
+    dashBar.addEventListener('click', (e) => {
+      const tab = e.target && e.target.closest ? e.target.closest('#dash-tabs > button[value]') : null;
+      if (!tab) return;
+      const requested = tab.getAttribute('value');
+      if (!requested || requested === activeDash) return;
+      window.setTimeout(() => {
+        if (activeDash !== requested && dashboards.some((d) => d.id === requested)) {
+          selectDashboard(requested);
+        }
+      }, 0);
+    });
+  }
   function renderPalette() {
     const chips = document.getElementById('dash-palette-chips');
     if (!chips) return;
@@ -1292,6 +1420,7 @@
       el.style.display = idx >= 0 ? '' : 'none';
       el.style.order = idx >= 0 ? String(idx + 2) : '99';
       el.style.gridColumn = idx >= 0 ? 'span ' + widgetCols(d, id) + ' / span ' + widgetCols(d, id) : '';
+      el.style.minHeight = idx >= 0 && d.heights && d.heights[id] ? d.heights[id] + 'px' : '';
     });
     renderTabs();
     renderPalette();
@@ -1318,24 +1447,32 @@
         el.addEventListener('pointerdown', (e) => {
           if (!customizing) return;
           const t = e.target;
-          if (t.closest('.widget-tools') || t.closest('.widget-resize')) return;
+          if (t.closest('.widget-tools') || t.closest('.rz')) return;
           if (t.closest('.card-title') || (id === 'overview' && !t.closest('button, select, input, a'))) {
             startWidgetDrag(e, el, id);
           }
         });
       }
-      // Corner resize handle (customize mode only, on-board only).
-      let handle = el.querySelector(':scope > .widget-resize');
+      // Resize handles on all four corners and all four sides
+      // (customize mode only, on-board only).
       if (customizing && onBoard) {
-        if (!handle) {
-          handle = document.createElement('div');
-          handle.className = 'widget-resize';
-          handle.title = 'Drag to resize — snaps to columns';
-          handle.addEventListener('pointerdown', (e) => startWidgetResize(e, el, id));
-          el.appendChild(handle);
+        if (!el.querySelector(':scope > .rz')) {
+          const arrows = { n: '↕', s: '↕', e: '↔', w: '↔', ne: '↗', nw: '↖', se: '↘', sw: '↙' };
+          ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'].forEach((dir) => {
+            const hd = document.createElement('div');
+            hd.className = 'rz rz-' + dir;
+            const arrow = document.createElement('span');
+            arrow.className = 'rz-arrow';
+            arrow.textContent = arrows[dir];
+            hd.appendChild(arrow);
+            hd.title = 'Drag to resize';
+            hd.setAttribute('aria-hidden', 'true');
+            hd.addEventListener('pointerdown', (e) => startWidgetResize(e, el, id, dir));
+            el.appendChild(hd);
+          });
         }
-      } else if (handle) {
-        handle.remove();
+      } else {
+        el.querySelectorAll(':scope > .rz').forEach((hd) => hd.remove());
       }
       el.classList.toggle('customizing', customizing && onBoard);
       let tools = el.querySelector(':scope > .widget-tools');
@@ -1408,23 +1545,37 @@
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
   }
-  // Corner drag-resize: column width from the grid container, snapped
-  // to whole columns (3–12) as the pointer moves.
-  function startWidgetResize(e, card, id) {
+  // Drag-resize from any corner or side. East-side handles grow the
+  // width to the right, west-side handles grow it "from the left"
+  // (in a flowing grid: width increases, content reflows), south
+  // handles set a taller minimum height, north handles grow it
+  // upward — all snapped: whole columns across, 20px steps down.
+  function startWidgetResize(e, card, id, dir) {
     if (!customizing) return;
     e.preventDefault();
     e.stopPropagation();
     const grid = document.getElementById('view-live');
     const colW = grid.getBoundingClientRect().width / 12;
-    const startX = e.clientX;
+    const startX = e.clientX, startY = e.clientY;
     const d = currentDash();
     if (!d.sizes) d.sizes = {};
+    if (!d.heights) d.heights = {};
     const startCols = widgetCols(d, id);
+    const startH = card.getBoundingClientRect().height;
+    const growsRight = dir.includes('e');
+    const growsLeft = dir.includes('w');
+    const growsDown = dir.includes('s');
+    const growsUp = dir.includes('n');
     const move = (ev) => {
-      const cols = Math.min(12, Math.max(3, Math.round(startCols + (ev.clientX - startX) / colW)));
-      if (cols !== widgetCols(d, id)) {
-        d.sizes[id] = cols;
-        applyDashboard(); refreshChrome();
+      if (growsRight || growsLeft) {
+        const dx = (ev.clientX - startX) * (growsLeft ? -1 : 1);
+        const cols = Math.min(12, Math.max(3, Math.round(startCols + dx / colW)));
+        if (cols !== widgetCols(d, id)) { d.sizes[id] = cols; applyDashboard(); refreshChrome(); }
+      }
+      if (growsDown || growsUp) {
+        const dy = (ev.clientY - startY) * (growsUp ? -1 : 1);
+        const px = Math.min(1200, Math.max(140, Math.round((startH + dy) / 20) * 20));
+        if (px !== d.heights[id]) { d.heights[id] = px; applyDashboard(); refreshChrome(); }
       }
     };
     const up = () => {
@@ -1463,6 +1614,13 @@
       dashSnapshot = null;
       setCustomizing(false);
     }
+  });
+  const dashDelete = document.getElementById('dash-delete');
+  if (dashDelete) dashDelete.addEventListener('click', () => {
+    if (dashboards.length <= 1) return;
+    dashboards = dashboards.filter((x) => x.id !== activeDash);
+    activeDash = dashboards[0].id;
+    applyDashboard(); refreshChrome();
   });
   if (dashCancel) dashCancel.addEventListener('click', () => {
     if (dashSnapshot) {

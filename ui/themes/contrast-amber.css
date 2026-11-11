@@ -1,0 +1,47 @@
+/* High Contrast Amber — an app-local Deadband theme (not part of the vendored nmui pin).
+   Black and amber with white text and cyan signals — high-visibility industrial, day or night.
+   Selected via <html theme="contrast-amber"> from Settings. */
+
+:root[theme="contrast-amber"] {
+  --md-sys-color-primary: #ffb000;
+  --md-sys-color-on-primary: #000000;
+  --md-sys-color-primary-container: #ffb000;
+  --md-sys-color-on-primary-container: #000000;
+  --md-sys-color-secondary: #ffffff;
+  --md-sys-color-on-secondary: #000000;
+  --md-sys-color-secondary-container: #ffffff;
+  --md-sys-color-on-secondary-container: #000000;
+  --md-sys-color-tertiary: #00e5ff;
+  --md-sys-color-on-tertiary: #000000;
+  --md-sys-color-tertiary-container: #00e5ff;
+  --md-sys-color-on-tertiary-container: #000000;
+  --md-sys-color-error: #ff6d64;
+  --md-sys-color-on-error: #000000;
+  --md-sys-color-error-container: #ff6d64;
+  --md-sys-color-on-error-container: #000000;
+  --md-sys-color-surface: #050505;
+  --md-sys-color-on-surface: #ffffff;
+  --md-sys-color-surface-variant: #161616;
+  --md-sys-color-on-surface-variant: #ffffff;
+  --md-sys-color-surface-container-lowest: #000000;
+  --md-sys-color-surface-container-low: #080808;
+  --md-sys-color-surface-container: #101010;
+  --md-sys-color-surface-container-high: #1d1d1d;
+  --md-sys-color-surface-container-highest: #2b2b2b;
+  --md-sys-color-inverse-surface: #ffffff;
+  --md-sys-color-inverse-on-surface: #000000;
+  --md-sys-color-inverse-primary: #0033cc;
+  --md-sys-color-outline: #ffb000;
+  --md-sys-color-outline-variant: #8a6d00;
+  --md-sys-color-background: #050505;
+  --md-sys-color-on-background: #ffffff;
+  --md-sys-color-shadow: #000000;
+  --md-sys-color-scrim: #000000;
+  --md-sys-shape-corner-none: 0;
+  --md-sys-shape-corner-extra-small: 0px;
+  --md-sys-shape-corner-small: 2px;
+  --md-sys-shape-corner-medium: 4px;
+  --md-sys-shape-corner-large: 6px;
+  --md-sys-shape-corner-extra-large: 8px;
+  --md-sys-shape-corner-full: 999px;
+}

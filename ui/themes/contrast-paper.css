@@ -1,0 +1,47 @@
+/* High Contrast Paper — an app-local Deadband theme (not part of the vendored nmui pin).
+   Pure white, black text, and saturated blue/violet accents for maximum legibility in bright light.
+   Selected via <html theme="contrast-paper"> from Settings. */
+
+:root[theme="contrast-paper"] {
+  --md-sys-color-primary: #0033cc;
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-primary-container: #0033cc;
+  --md-sys-color-on-primary-container: #ffffff;
+  --md-sys-color-secondary: #5b21b6;
+  --md-sys-color-on-secondary: #ffffff;
+  --md-sys-color-secondary-container: #5b21b6;
+  --md-sys-color-on-secondary-container: #ffffff;
+  --md-sys-color-tertiary: #7a3b00;
+  --md-sys-color-on-tertiary: #ffffff;
+  --md-sys-color-tertiary-container: #ffb000;
+  --md-sys-color-on-tertiary-container: #000000;
+  --md-sys-color-error: #b00020;
+  --md-sys-color-on-error: #ffffff;
+  --md-sys-color-error-container: #b00020;
+  --md-sys-color-on-error-container: #ffffff;
+  --md-sys-color-surface: #ffffff;
+  --md-sys-color-on-surface: #000000;
+  --md-sys-color-surface-variant: #e5e5e5;
+  --md-sys-color-on-surface-variant: #000000;
+  --md-sys-color-surface-container-lowest: #ffffff;
+  --md-sys-color-surface-container-low: #f2f2f2;
+  --md-sys-color-surface-container: #ffffff;
+  --md-sys-color-surface-container-high: #e5e5e5;
+  --md-sys-color-surface-container-highest: #cccccc;
+  --md-sys-color-inverse-surface: #000000;
+  --md-sys-color-inverse-on-surface: #ffffff;
+  --md-sys-color-inverse-primary: #ffff00;
+  --md-sys-color-outline: #000000;
+  --md-sys-color-outline-variant: #666666;
+  --md-sys-color-background: #ffffff;
+  --md-sys-color-on-background: #000000;
+  --md-sys-color-shadow: #000000;
+  --md-sys-color-scrim: #000000;
+  --md-sys-shape-corner-none: 0;
+  --md-sys-shape-corner-extra-small: 0px;
+  --md-sys-shape-corner-small: 2px;
+  --md-sys-shape-corner-medium: 4px;
+  --md-sys-shape-corner-large: 6px;
+  --md-sys-shape-corner-extra-large: 8px;
+  --md-sys-shape-corner-full: 999px;
+}

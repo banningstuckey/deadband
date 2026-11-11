@@ -1,0 +1,47 @@
+/* Daylight Steel — an app-local Deadband theme (not part of the vendored nmui pin).
+   Pale blue-gray surfaces with deep blue and teal accents — a brighter relative of Industrial Dark.
+   Selected via <html theme="daylight-steel"> from Settings. */
+
+:root[theme="daylight-steel"] {
+  --md-sys-color-primary: #0047ab;
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-primary-container: #dbeafe;
+  --md-sys-color-on-primary-container: #002f6f;
+  --md-sys-color-secondary: #006b6f;
+  --md-sys-color-on-secondary: #ffffff;
+  --md-sys-color-secondary-container: #ccfbf1;
+  --md-sys-color-on-secondary-container: #064e4a;
+  --md-sys-color-tertiary: #7c4a00;
+  --md-sys-color-on-tertiary: #ffffff;
+  --md-sys-color-tertiary-container: #fde68a;
+  --md-sys-color-on-tertiary-container: #451a03;
+  --md-sys-color-error: #b42318;
+  --md-sys-color-on-error: #ffffff;
+  --md-sys-color-error-container: #fee4e2;
+  --md-sys-color-on-error-container: #7a271a;
+  --md-sys-color-surface: #f4f8fc;
+  --md-sys-color-on-surface: #0f2237;
+  --md-sys-color-surface-variant: #dde8f2;
+  --md-sys-color-on-surface-variant: #29465e;
+  --md-sys-color-surface-container-lowest: #ffffff;
+  --md-sys-color-surface-container-low: #eaf2f8;
+  --md-sys-color-surface-container: #f7fbff;
+  --md-sys-color-surface-container-high: #e1ecf5;
+  --md-sys-color-surface-container-highest: #cfe0f0;
+  --md-sys-color-inverse-surface: #0b2239;
+  --md-sys-color-inverse-on-surface: #ffffff;
+  --md-sys-color-inverse-primary: #93c5fd;
+  --md-sys-color-outline: #5b7a94;
+  --md-sys-color-outline-variant: #bfd2e2;
+  --md-sys-color-background: #eef5fa;
+  --md-sys-color-on-background: #0f2237;
+  --md-sys-color-shadow: #000000;
+  --md-sys-color-scrim: #000000;
+  --md-sys-shape-corner-none: 0;
+  --md-sys-shape-corner-extra-small: 2px;
+  --md-sys-shape-corner-small: 4px;
+  --md-sys-shape-corner-medium: 6px;
+  --md-sys-shape-corner-large: 8px;
+  --md-sys-shape-corner-extra-large: 12px;
+  --md-sys-shape-corner-full: 999px;
+}
