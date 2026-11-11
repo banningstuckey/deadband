@@ -107,22 +107,10 @@ main {
   #view-live [data-widget] { grid-column: 1 / -1 !important; }
 }
 /* Resize handles: all four corners + all four sides (customize mode).
-   The transparent strips/boxes are the grab areas; the centered arrow
-   chip is visible on every side and corner. */
-.rz {
-  position: absolute; z-index: 7; touch-action: none;
-  display: flex; align-items: center; justify-content: center;
-}
-.rz-arrow {
-  display: inline-flex; align-items: center; justify-content: center;
-  min-width: 22px; height: 22px; padding: 0 3px; box-sizing: border-box;
-  border: 1px solid var(--md-sys-color-outline);
-  border-radius: 999px;
-  background: var(--md-sys-color-surface-container-highest);
-  color: var(--md-sys-color-on-surface);
-  font-size: 13px; font-weight: 700; line-height: 1;
-  pointer-events: none; user-select: none;
-}
+   Deliberately invisible — no icons. The transparent grab zones only
+   change the cursor when the pointer is close enough to an edge or
+   corner, the way mainstream dashboard builders do it. */
+.rz { position: absolute; z-index: 7; touch-action: none; }
 .rz-n { top: -11px; left: 26px; right: 26px; height: 22px; cursor: ns-resize; }
 .rz-s { bottom: -11px; left: 26px; right: 26px; height: 22px; cursor: ns-resize; }
 .rz-e { right: -11px; top: 26px; bottom: 26px; width: 22px; cursor: ew-resize; }
@@ -172,6 +160,14 @@ ol.levels { margin: 6px 0; padding-left: 22px; line-height: 1.9; }
 ol.levels li span { color: var(--md-sys-color-on-surface-variant); }
 
 .card-actions { margin-top: 12px; }
+.clear-confirm { margin-top: 12px; }
+.clear-confirm-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.clear-confirm-row .text-input { width: 160px; }
+/* Settings exposed-dropdown fields: the field spans the row, the
+   menu is a fixed popup and takes no flex space. */
+.setting-row .menu-field { min-width: 300px; flex: 1 1 420px; max-width: 560px; }
+.card-actions .menu-field.compact { min-width: 220px; flex: 0 1 300px; }
+.setting-row .menu-field [trailing] { font-size: 18px; color: var(--md-sys-color-on-surface-variant); }
 
 .rail-brand-row { display: flex; align-items: center; gap: 4px; }
 /* The brand artwork sits on a pure-black ground while the rail is
@@ -189,17 +185,31 @@ ol.levels li span { color: var(--md-sys-color-on-surface-variant); }
   background-repeat: no-repeat;
   mix-blend-mode: screen;
 }
-/* The supplied brand art is on black. In the light themes, keep it on
-   a small black plaque rather than letting screen blending wash it
-   out against a white rail. */
-:root[theme="paper-white"] .rail-brand-row,
-:root[theme="daylight-steel"] .rail-brand-row,
-:root[theme="warm-light"] .rail-brand-row,
-:root[theme="contrast-paper"] .rail-brand-row {
-  background: #050505;
-  border-radius: 10px;
-  padding: 4px 6px 4px 0;
+/* Light themes: the supplied brand art is a JPEG with black baked
+   into the pixels — no blend mode can lift that black off a light
+   rail without washing the lettering out with it, so the black
+   plaque is gone. Instead the rail shows a live-text wordmark in
+   the theme's own colors (same steel/copper two-tone as the art),
+   which has no background at all and matches every theme. The
+   image art stays on the dark themes, untouched. */
+.rail-wordmark-text { display: none; }
+:root[theme="paper-white"] .rail-mark,
+:root[theme="daylight-steel"] .rail-mark,
+:root[theme="warm-light"] .rail-mark,
+:root[theme="contrast-paper"] .rail-mark,
+:root[theme="paper-white"] .rail-wordmark,
+:root[theme="daylight-steel"] .rail-wordmark,
+:root[theme="warm-light"] .rail-wordmark,
+:root[theme="contrast-paper"] .rail-wordmark { display: none; }
+:root[theme="paper-white"] .rail-wordmark-text,
+:root[theme="daylight-steel"] .rail-wordmark-text,
+:root[theme="warm-light"] .rail-wordmark-text,
+:root[theme="contrast-paper"] .rail-wordmark-text {
+  display: block; margin-left: 10px;
+  font-size: 19px; font-weight: 800; letter-spacing: 0.05em; line-height: 1;
 }
+.rail-wordmark-text .rw-dead { color: var(--md-sys-color-primary); }
+.rail-wordmark-text .rw-band { color: var(--md-sys-color-tertiary); }
 
 footer.note { color: var(--md-sys-color-on-surface-variant); font-size: 12px; }
 
@@ -360,16 +370,17 @@ select.text-input { max-width: 240px; }
 .frame-write { border-color: var(--md-sys-color-tertiary); }
 .frame-time { font-size: 11px; color: var(--md-sys-color-on-surface-variant); }
 .frame-arrow { align-self: center; color: var(--md-sys-color-on-surface-variant); }
-.heart-row { display: flex; align-items: center; gap: 14px; padding: 3px 0; flex-wrap: wrap; }
-.heart-name { min-width: 190px; font-size: 12.5px; }
-.heart-svg { width: 220px; height: 30px; flex: 0 0 auto; }
+.heart-row { display: flex; align-items: center; gap: 14px; padding: 3px 0; flex-wrap: nowrap; }
+.heart-name { min-width: 150px; flex: 0 0 auto; font-size: 12.5px; }
+.heart-svg { flex: 1 1 auto; min-width: 0; height: 30px; }
+.heart-vline { stroke: var(--md-sys-color-on-surface-variant); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0.7; pointer-events: none; }
 .heart-svg polyline { fill: none; stroke: var(--md-sys-color-primary); stroke-width: 1.6; pointer-events: none; }
 .heart-wrote polyline { stroke: var(--md-sys-color-tertiary); }
 .heart-hit { fill: transparent; pointer-events: all; cursor: crosshair; }
 .heart-marker { fill: var(--md-sys-color-surface); stroke: var(--md-sys-color-primary); stroke-width: 2; pointer-events: none; }
 .heart-wrote .heart-marker { stroke: var(--md-sys-color-tertiary); }
 .heart-value {
-  min-width: 245px; font-size: 12.5px;
+  min-width: 0; flex: 0 0 auto; white-space: nowrap; font-size: 12.5px;
   color: var(--md-sys-color-on-surface-variant);
   font-variant-numeric: tabular-nums;
 }

@@ -1,0 +1,247 @@
+/* nmui-menu — M3 menu.
+ * Bare = the baseline menu: 112–280dp wide, 4dp corners,
+ * surface-container, 48dp items at 12dp padding. [vertical] is
+ * the M3 Expressive vertical menu: rounded surface-container-low
+ * container, inset pill items, tertiary selected state, and
+ * <section> groups split by gaps. [vibrant] is the vertical
+ * menu in the tertiary color mapping (tertiary-container
+ * surface, tertiary selected) and implies the vertical
+ * geometry. Positioning is fixed; JS places the menu at its
+ * anchor (or beside the parent item, for submenus) and flips
+ * it away from window edges. */
+
+nmui-menu {
+  display: none;
+  position: fixed;
+  z-index: 40;
+  min-width: 112px;
+  max-width: 280px;
+  max-height: calc(100vh - 16px);
+  overflow: auto;
+  padding: 8px 0;
+  box-sizing: border-box;
+  border-radius: var(--md-sys-shape-corner-extra-small, 4px);
+  background-color: var(--md-sys-color-surface-container, #f3edf7);
+  color: var(--md-sys-color-on-surface, #1c1b1f);
+  box-shadow: var(--md-sys-elevation-level2,
+    0 2px 6px 2px rgb(0 0 0 / 0.15), 0 1px 2px 0 rgb(0 0 0 / 0.3));
+  transform-origin: top left;
+}
+
+nmui-menu[open] {
+  display: block;
+  animation: nmui-menu-in var(--md-sys-motion-spring-fast-effects,
+    150ms cubic-bezier(0.2, 0, 0, 1));
+}
+
+@keyframes nmui-menu-in {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* ---- items ---- */
+
+nmui-menu > button,
+nmui-menu > section > button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 6px 12px;
+  box-sizing: border-box;
+  border: 0;
+  background: transparent;
+  font: var(--md-sys-typescale-label-large, 500 14px/20px system-ui);
+  color: inherit;
+  cursor: pointer;
+  text-align: start;
+}
+
+nmui-menu > button:hover,
+nmui-menu > section > button:hover {
+  background-color: color-mix(in srgb,
+    var(--md-sys-color-on-surface, #1c1b1f) 8%, transparent);
+}
+
+nmui-menu > button:focus-visible,
+nmui-menu > section > button:focus-visible {
+  background-color: color-mix(in srgb,
+    var(--md-sys-color-on-surface, #1c1b1f) 12%, transparent);
+  outline: none;
+}
+
+nmui-menu > button:active,
+nmui-menu > section > button:active {
+  background-color: color-mix(in srgb,
+    var(--md-sys-color-on-surface, #1c1b1f) 12%, transparent);
+}
+
+nmui-menu > button > icon,
+nmui-menu > section > button > icon {
+  flex: none;
+  color: var(--md-sys-color-on-surface-variant, #49454f);
+  font-size: 24px;
+  line-height: 1;
+}
+
+nmui-menu > button > span.label,
+nmui-menu > section > button > span.label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+nmui-menu > button > span.label > small,
+nmui-menu > section > button > span.label > small {
+  font: var(--md-sys-typescale-body-small, 400 12px/16px system-ui);
+  color: var(--md-sys-color-on-surface-variant, #49454f);
+}
+
+nmui-menu > button > [trailing],
+nmui-menu > section > button > [trailing] {
+  margin-inline-start: auto;
+  color: var(--md-sys-color-on-surface-variant, #49454f);
+}
+
+nmui-menu > button > icon.sub-arrow,
+nmui-menu > section > button > icon.sub-arrow {
+  margin-inline-start: auto;
+}
+
+/* Selected (baseline): the check mark leads, the row takes the
+ * highest container tone. */
+nmui-menu > button[selected],
+nmui-menu > section > button[selected] {
+  background-color: var(--md-sys-color-surface-container-highest, #e6e0e9);
+}
+
+/* Disabled items stay focusable (aria-disabled, set from JS);
+ * they take no state layer and never select. */
+nmui-menu > button[aria-disabled="true"],
+nmui-menu > section > button[aria-disabled="true"] {
+  color: color-mix(in srgb,
+    var(--md-sys-color-on-surface, #1c1b1f) 38%, transparent);
+  cursor: default;
+}
+
+nmui-menu > button[aria-disabled="true"] > icon,
+nmui-menu > section > button[aria-disabled="true"] > icon {
+  color: color-mix(in srgb,
+    var(--md-sys-color-on-surface-variant, #49454f) 38%, transparent);
+}
+
+nmui-menu > button[aria-disabled="true"]:hover,
+nmui-menu > section > button[aria-disabled="true"]:hover {
+  background-color: transparent;
+}
+
+nmui-menu > nmui-divider,
+nmui-menu > section > nmui-divider {
+  margin: 8px 0;
+}
+
+/* Baseline sections are invisible groups — separation comes
+ * from the dividers authors put between them. */
+nmui-menu > section {
+  display: block;
+}
+
+/* ---- vertical (M3 Expressive) ---- */
+
+nmui-menu[vertical],
+nmui-menu[vibrant] {
+  padding: 8px;
+  border-radius: var(--md-sys-shape-corner-large, 16px);
+  background-color: var(--md-sys-color-surface-container-low, #f7f2fa);
+}
+
+nmui-menu[vertical] > button,
+nmui-menu[vibrant] > button,
+nmui-menu[vertical] > section > button,
+nmui-menu[vibrant] > section > button {
+  border-radius: var(--md-sys-shape-corner-medium, 12px);
+  padding: 8px 12px;
+}
+
+nmui-menu[vertical] > section,
+nmui-menu[vibrant] > section {
+  margin-top: 8px;
+}
+
+nmui-menu[vertical] > section:first-child,
+nmui-menu[vibrant] > section:first-child {
+  margin-top: 0;
+}
+
+nmui-menu[vertical] > section[title]::before,
+nmui-menu[vibrant] > section[title]::before {
+  content: attr(title);
+  display: block;
+  padding: 8px 12px 4px;
+  font: var(--md-sys-typescale-label-medium, 500 12px/16px system-ui);
+  color: var(--md-sys-color-on-surface-variant, #49454f);
+}
+
+/* Vertical selected: tertiary container. */
+nmui-menu[vertical] > button[selected],
+nmui-menu[vibrant] > button[selected],
+nmui-menu[vertical] > section > button[selected],
+nmui-menu[vibrant] > section > button[selected] {
+  background-color: var(--md-sys-color-tertiary-container, #ffd8e4);
+  color: var(--md-sys-color-on-tertiary-container, #633b48);
+}
+
+nmui-menu[vertical] > button[selected] > icon,
+nmui-menu[vibrant] > button[selected] > icon,
+nmui-menu[vertical] > section > button[selected] > icon,
+nmui-menu[vibrant] > section > button[selected] > icon {
+  color: var(--md-sys-color-on-tertiary-container, #633b48);
+}
+
+/* ---- vibrant color mapping ---- */
+
+nmui-menu[vibrant] {
+  background-color: var(--md-sys-color-tertiary-container, #ffd8e4);
+  color: var(--md-sys-color-on-tertiary-container, #633b48);
+}
+
+nmui-menu[vibrant] > button > icon,
+nmui-menu[vibrant] > section > button > icon,
+nmui-menu[vibrant] > button > span.label > small,
+nmui-menu[vibrant] > section > button > span.label > small,
+nmui-menu[vibrant] > button > [trailing],
+nmui-menu[vibrant] > section > button > [trailing],
+nmui-menu[vibrant] > section[title]::before {
+  color: var(--md-sys-color-on-tertiary-container, #633b48);
+}
+
+nmui-menu[vibrant] > button:hover,
+nmui-menu[vibrant] > section > button:hover {
+  background-color: color-mix(in srgb,
+    var(--md-sys-color-on-tertiary-container, #633b48) 8%, transparent);
+}
+
+nmui-menu[vibrant] > button:focus-visible,
+nmui-menu[vibrant] > button:active,
+nmui-menu[vibrant] > section > button:focus-visible,
+nmui-menu[vibrant] > section > button:active {
+  background-color: color-mix(in srgb,
+    var(--md-sys-color-on-tertiary-container, #633b48) 12%, transparent);
+}
+
+/* Vibrant selected: full tertiary. */
+nmui-menu[vibrant] > button[selected],
+nmui-menu[vibrant] > section > button[selected] {
+  background-color: var(--md-sys-color-tertiary, #7d5260);
+  color: var(--md-sys-color-on-tertiary, #ffffff);
+}
+
+nmui-menu[vibrant] > button[selected] > icon,
+nmui-menu[vibrant] > section > button[selected] > icon {
+  color: var(--md-sys-color-on-tertiary, #ffffff);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  nmui-menu[open] { animation: none; }
+}

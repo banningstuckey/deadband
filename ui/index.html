@@ -25,6 +25,8 @@
 <link rel="stylesheet" href="./vendor/nmui/components/badge/badge.css">
 <link rel="stylesheet" href="./vendor/nmui/components/divider/divider.css">
 <link rel="stylesheet" href="./vendor/nmui/components/tabs/tabs.css">
+<link rel="stylesheet" href="./vendor/nmui/components/menu/menu.css">
+<link rel="stylesheet" href="./vendor/nmui/components/text-field/text-field.css">
 <link rel="stylesheet" href="./app.css">
 <script type="module">
   import "./vendor/nmui/components/navigation/navigation.js";
@@ -33,6 +35,8 @@
   import "./vendor/nmui/components/badge/badge.js";
   import "./vendor/nmui/components/divider/divider.js";
   import "./vendor/nmui/components/tabs/tabs.js";
+  import "./vendor/nmui/components/menu/menu.js";
+  import "./vendor/nmui/components/text-field/text-field.js";
 </script>
 </head>
 <body>
@@ -48,6 +52,7 @@
           <img class="rail-mark" src="./assets/deadband-mark.png" alt=""
                onerror="this.remove()">
           <div class="rail-wordmark" role="img" aria-label="DEADBAND"></div>
+          <div class="rail-wordmark-text" aria-hidden="true"><span class="rw-dead">DEAD</span><span class="rw-band">BAND</span></div>
         </div>
       </header>
       <a href="#" data-view="live" selected>Live map</a>
@@ -157,7 +162,7 @@
           <h2 class="card-title">Heartbeats — device rhythm</h2>
           <div id="heart-body"><p class="dim">Each device's traffic rhythm as a waveform.
           Steady = healthy polling. Bunched, frantic, or flat = look closer.</p></div>
-          <div id="heart-readout" class="heart-readout" aria-live="polite">Hover any point on a heartbeat to see its event count, write count, and time slice.</div>
+          <div id="heart-readout" class="heart-readout" aria-live="polite">Hover any point on a heartbeat to compare that time slice across every device.</div>
         </nmui-card>
       </section>
 
@@ -264,7 +269,12 @@
           <h2 class="card-title">AI analyst — layer 3 (optional, local model)</h2>
           <p id="analyst-status" class="sim-status">Checking for a local model…</p>
           <div class="card-actions">
-            <select id="analyst-model" class="text-input" aria-label="Local model"></select>
+            <nmui-text-field outlined id="analyst-model-field" class="menu-field compact">
+              <label>Local model</label>
+              <input readonly value="First available">
+              <span trailing>▾</span>
+            </nmui-text-field>
+            <nmui-menu anchor="analyst-model-field" id="analyst-model-menu"></nmui-menu>
             <nmui-button tonal id="btn-explain">Explain the latest alert</nmui-button>
           </div>
           <div id="analyst-output" class="analyst-output" hidden></div>
@@ -290,38 +300,36 @@
         <nmui-card outlined>
           <h2 class="card-title">Preferences</h2>
           <div class="setting-row">
-            <label for="set-theme">Theme</label>
-            <select id="set-theme" class="text-input">
-              <option value="deadband-industrial">Industrial Dark — charcoal, steel blue, amber</option>
-              <option value="midnight-steel">Midnight Steel — deep navy, soft blue, rounder</option>
-              <option value="console-green">Console Green — terminal green on black</option>
-              <option value="ember-dark">Ember Dark — warm charcoal, ember and copper</option>
-              <option value="paper-white">Paper White — clean white, ink text, steel blue</option>
-              <option value="daylight-steel">Daylight Steel — pale blue-gray, deep blue and teal</option>
-              <option value="warm-light">Warm Light — warm off-white, copper and teal</option>
-              <option value="contrast-noir">High Contrast Noir — black, white, yellow and cyan</option>
-              <option value="contrast-paper">High Contrast Paper — white, black, blue and violet</option>
-              <option value="contrast-amber">High Contrast Amber — black, amber, white and cyan</option>
-            </select>
+            <nmui-text-field outlined id="set-theme-field" class="menu-field">
+              <label>Theme</label>
+              <input readonly value="Industrial Dark — charcoal, steel blue, amber">
+              <span trailing>▾</span>
+            </nmui-text-field>
+            <nmui-menu anchor="set-theme-field" id="set-theme-menu"></nmui-menu>
           </div>
           <div class="setting-row">
-            <label for="set-launch-dash">Dashboard shown at launch</label>
-            <select id="set-launch-dash" class="text-input"></select>
+            <nmui-text-field outlined id="set-launch-field" class="menu-field">
+              <label>Dashboard shown at launch</label>
+              <input readonly value="Overview">
+              <span trailing>▾</span>
+            </nmui-text-field>
+            <nmui-menu anchor="set-launch-field" id="set-launch-menu"></nmui-menu>
           </div>
           <div class="setting-row">
-            <label for="set-log-filter">Event log opens on</label>
-            <select id="set-log-filter" class="text-input">
-              <option value="important">Important events</option>
-              <option value="alerts">Alerts only</option>
-              <option value="writes">Writes only</option>
-              <option value="all">All traffic</option>
-            </select>
+            <nmui-text-field outlined id="set-log-field" class="menu-field">
+              <label>Event log opens on</label>
+              <input readonly value="Important events">
+              <span trailing>▾</span>
+            </nmui-text-field>
+            <nmui-menu anchor="set-log-field" id="set-log-menu"></nmui-menu>
           </div>
           <div class="setting-row">
-            <label for="set-analyst-model">Preferred analyst model</label>
-            <select id="set-analyst-model" class="text-input">
-              <option value="">First available</option>
-            </select>
+            <nmui-text-field outlined id="set-model-field" class="menu-field">
+              <label>Preferred analyst model</label>
+              <input readonly value="First available">
+              <span trailing>▾</span>
+            </nmui-text-field>
+            <nmui-menu anchor="set-model-field" id="set-model-menu"></nmui-menu>
           </div>
           <p class="dim">Preferences live on this machine only, like everything
           else in Deadband.</p>
@@ -337,16 +345,59 @@
           <div class="card-actions">
             <nmui-button tonal id="btn-clear-data">Clear stored data</nmui-button>
           </div>
+          <div class="clear-confirm" id="clear-confirm" hidden>
+            <p class="dim">This erases everything Deadband has learned on
+            this machine — devices, connections, events, baselines.
+            Type <strong>CLEAR</strong> to wipe it. There is no undo.</p>
+            <div class="clear-confirm-row">
+              <input id="clear-confirm-input" class="text-input" type="text"
+                placeholder="Type CLEAR" autocomplete="off" autocapitalize="characters">
+              <nmui-button tonal id="btn-clear-confirm" disabled>Wipe everything</nmui-button>
+              <nmui-button id="btn-clear-cancel">Cancel</nmui-button>
+            </div>
+          </div>
           <p class="dim" id="clear-status"></p>
         </nmui-card>
       </section>
 
-      <footer class="note">UI: nmui v0.40.0, vendored and pinned (ui/vendor/nmui) · Themes selectable in Settings</footer>
+      <footer class="note">UI: nmui v0.43.1, vendored and pinned (ui/vendor/nmui) · Themes selectable in Settings</footer>
     </main>
   </div>
 
 <script>
   const invoke = window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke;
+
+  // ---- menu-field helpers (defined here, before any use) -----------------
+  // M3 exposed dropdown: a readonly nmui-text-field shows the value,
+  // an nmui-menu anchored to it offers the choices; picking writes
+  // back into the field. (Native <select> never looked like nmui.)
+  function setMenuField(fieldId, label) {
+    const f = document.getElementById(fieldId);
+    if (f) f.querySelector('input').value = label;
+  }
+  function fillMenu(menuId, items, current) {
+    const menu = document.getElementById(menuId);
+    if (!menu) return;
+    menu.innerHTML = '';
+    items.forEach(([value, label]) => {
+      const b = document.createElement('button');
+      b.setAttribute('value', value);
+      b.textContent = label;
+      if (value === current) b.setAttribute('selected', '');
+      menu.appendChild(b);
+    });
+  }
+  function wireMenuField(fieldId, menuId, onPick) {
+    const field = document.getElementById(fieldId);
+    const menu = document.getElementById(menuId);
+    if (!field || !menu) return;
+    field.addEventListener('click', () => menu.toggle());
+    menu.addEventListener('change', (e) => {
+      const item = menu.querySelector('button[value="' + e.detail.value + '"]');
+      if (item) setMenuField(fieldId, item.textContent.trim());
+      onPick(e.detail.value);
+    });
+  }
   const listen = window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.listen;
 
   async function checkEngine() {
@@ -650,10 +701,72 @@
     });
   }
 
+  // Shared heartbeat crosshair: hovering one slice shows a marker on
+  // EVERY row at that same time slice, a dashed vertical line through
+  // each sparkline, and every row's own numbers for that slice.
+  // The bin survives the 5s re-render (stored in heartHoverBin).
+  let heartHoverBin = null;
+  function heartBinDetail(hb, i) {
+    const count = hb.bins[i];
+    const start = hb.tMin + i * hb.slice;
+    const end = start + hb.slice;
+    return count + (count === 1 ? ' event' : ' events') +
+      ' \u00b7 ' + hb.writeBins[i] + (hb.writeBins[i] === 1 ? ' write' : ' writes') +
+      ' \u00b7 ' + fmtTime(start) + '\u2013' + fmtTime(end);
+  }
+  function applyHeartHover(bin) {
+    const body = document.getElementById('heart-body');
+    if (!body) return;
+    let readoutText = null;
+    body.querySelectorAll('.heart-row').forEach((row) => {
+      const hb = row._hb;
+      if (!hb) return;
+      const x = ((bin + 0.5) / hb.bins.length * hb.width).toFixed(1);
+      const y = (26 - hb.bins[bin] / hb.max * 22).toFixed(1);
+      const value = row.querySelector('.heart-value');
+      if (value) value.textContent = heartBinDetail(hb, bin);
+      const marker = row.querySelector('.heart-marker');
+      if (marker) {
+        marker.setAttribute('cx', x);
+        marker.setAttribute('cy', y);
+        marker.style.display = '';
+      }
+      const vline = row.querySelector('.heart-vline');
+      if (vline) {
+        vline.setAttribute('x1', x);
+        vline.setAttribute('x2', x);
+        vline.style.display = '';
+      }
+      if (readoutText === null) readoutText = hb.deviceName + ' \u2014 ' + heartBinDetail(hb, bin) + '.';
+    });
+    const readout = document.getElementById('heart-readout');
+    if (readout && readoutText) readout.textContent = readoutText + ' Every row above shows its own numbers for that same slice.';
+  }
+  function clearHeartHover() {
+    heartHoverBin = null;
+    const body = document.getElementById('heart-body');
+    if (!body) return;
+    body.querySelectorAll('.heart-row').forEach((row) => {
+      const hb = row._hb;
+      if (!hb) return;
+      const value = row.querySelector('.heart-value');
+      if (value) value.textContent = hb.defaultValue;
+      const marker = row.querySelector('.heart-marker');
+      if (marker) marker.style.display = 'none';
+      const vline = row.querySelector('.heart-vline');
+      if (vline) vline.style.display = 'none';
+    });
+    const readout = document.getElementById('heart-readout');
+    if (readout) readout.textContent = 'Hover any point on a heartbeat to compare that time slice across every device.';
+  }
   function renderHearts(recent, snap) {
     const body = document.getElementById('heart-body');
     const readout = document.getElementById('heart-readout');
     if (!recent.length || !snap.devices.length) return;
+    if (!body.dataset.hoverWired) {
+      body.dataset.hoverWired = '1';
+      body.addEventListener('mouseleave', clearHeartHover);
+    }
     const tMax = Math.max(...recent.map((e) => e.timestamp));
     const tMin = Math.min(...recent.map((e) => e.timestamp));
     const BINS = 24, span = Math.max(tMax - tMin, 1);
@@ -678,70 +791,68 @@
       const totalWrites = writeBins.reduce((sum, v) => sum + v, 0);
       const deviceName = d.label || d.ip;
       const defaultValue = total + (total === 1 ? ' event' : ' events') +
-        ' · ' + totalWrites + (totalWrites === 1 ? ' write' : ' writes') +
-        ' · peak ' + max + ' per slice';
-      const pts = bins.map((v, i) =>
-        (i / (BINS - 1) * 220).toFixed(1) + ',' + (26 - v / max * 22).toFixed(1)).join(' ');
+        ' \u00b7 ' + totalWrites + (totalWrites === 1 ? ' write' : ' writes') +
+        ' \u00b7 peak ' + max + ' per slice';
       const row = document.createElement('div');
       row.className = 'heart-row';
       const name = document.createElement('span');
       name.className = 'heart-name';
-      name.textContent = deviceName + (wrote ? ' · wrote' : '');
+      name.textContent = deviceName + (wrote ? ' \u00b7 wrote' : '');
       const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svg.setAttribute('viewBox', '0 0 220 30');
       svg.setAttribute('class', 'heart-svg' + (wrote ? ' heart-wrote' : ''));
       svg.setAttribute('role', 'img');
       svg.setAttribute('aria-label', deviceName + ' heartbeat: ' + defaultValue + '.');
-      const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
-      line.setAttribute('points', pts);
-      svg.appendChild(line);
-
       const value = document.createElement('span');
       value.className = 'heart-value';
       value.textContent = defaultValue;
-
+      row.append(name, svg, value);
+      body.appendChild(row);
+      // Full width: the sparkline stretches to the widget's width, so
+      // measure the laid-out element and size the viewBox to match
+      // (1:1 scale keeps the marker round). Falls back to 220 when
+      // the widget is hidden or layout is unavailable; the 5s
+      // refresh re-measures when the board changes.
+      const W = Math.max(220, Math.round(svg.getBoundingClientRect().width) || 0);
+      svg.setAttribute('viewBox', '0 0 ' + W + ' 30');
+      const pts = bins.map((v, i) =>
+        ((i + 0.5) / BINS * W).toFixed(1) + ',' + (26 - v / max * 22).toFixed(1)).join(' ');
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+      line.setAttribute('points', pts);
+      svg.appendChild(line);
+      const vline = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      vline.setAttribute('class', 'heart-vline');
+      vline.setAttribute('y1', '0');
+      vline.setAttribute('y2', '30');
+      vline.style.display = 'none';
+      svg.appendChild(vline);
       const marker = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
       marker.setAttribute('class', 'heart-marker');
       marker.setAttribute('r', '3.6');
       marker.style.display = 'none';
-
+      svg.appendChild(marker);
+      row._hb = { bins, writeBins, max, deviceName, defaultValue, tMin, slice, width: W };
       bins.forEach((count, i) => {
-        const x = i / (BINS - 1) * 220;
-        const y = 26 - count / max * 22;
         const start = tMin + i * slice;
         const end = start + slice;
         const hit = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        hit.setAttribute('x', (i / BINS * 220).toFixed(1));
+        hit.setAttribute('x', (i / BINS * W).toFixed(1));
         hit.setAttribute('y', '0');
-        hit.setAttribute('width', (220 / BINS).toFixed(1));
+        hit.setAttribute('width', (W / BINS).toFixed(1));
         hit.setAttribute('height', '30');
         hit.setAttribute('class', 'heart-hit');
         const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
         title.textContent = deviceName + ': ' + count + (count === 1 ? ' event' : ' events') +
           ', ' + writeBins[i] + (writeBins[i] === 1 ? ' write' : ' writes') +
-          ', ' + fmtTime(start) + '–' + fmtTime(end);
+          ', ' + fmtTime(start) + '\u2013' + fmtTime(end);
         hit.appendChild(title);
         hit.addEventListener('pointerenter', () => {
-          const detail = count + (count === 1 ? ' event' : ' events') +
-            ' · ' + writeBins[i] + (writeBins[i] === 1 ? ' write' : ' writes') +
-            ' · ' + fmtTime(start) + '–' + fmtTime(end);
-          value.textContent = detail;
-          if (readout) readout.textContent = deviceName + ' — ' + detail + '.';
-          marker.setAttribute('cx', x.toFixed(1));
-          marker.setAttribute('cy', y.toFixed(1));
-          marker.style.display = '';
+          heartHoverBin = i;
+          applyHeartHover(i);
         });
         svg.appendChild(hit);
       });
-      svg.appendChild(marker);
-      svg.addEventListener('pointerleave', () => {
-        value.textContent = defaultValue;
-        marker.style.display = 'none';
-        if (readout) readout.textContent = 'Hover any point on a heartbeat to see its event count, write count, and time slice.';
-      });
-      row.append(name, svg, value);
-      body.appendChild(row);
     });
+    if (heartHoverBin !== null) applyHeartHover(heartHoverBin);
   }
 
   async function loadViz() {
@@ -799,10 +910,18 @@
 
   // ---- analyst (layer 3, optional) ---------------------------------------
   const analystStatusEl = document.getElementById('analyst-status');
-  const analystModelEl = document.getElementById('analyst-model');
   const analystOutputEl = document.getElementById('analyst-output');
   const btnExplain = document.getElementById('btn-explain');
   let analystModelsLoaded = false;
+  // The model preference is shared by the Rules card and the Settings
+  // field; both are menu fields and each pick updates the other.
+  let analystModel = '';
+  fillMenu('analyst-model-menu', [['', 'First available']], '');
+  wireMenuField('analyst-model-field', 'analyst-model-menu', (v) => {
+    analystModel = v;
+    try { localStorage.setItem('deadband.analystModel', v); } catch (err) {}
+    setMenuField('set-model-field', v || 'First available');
+  });
 
   async function loadAnalyst() {
     if (!invoke) return;
@@ -812,15 +931,12 @@
       btnExplain.toggleAttribute('disabled', !a.reachable || a.models.length === 0);
       if (!analystModelsLoaded && a.models.length) {
         analystModelsLoaded = true;
-        a.models.forEach((m) => {
-          const opt = document.createElement('option');
-          opt.value = m; opt.textContent = m;
-          analystModelEl.appendChild(opt);
-        });
-        try {
-          const savedModel = localStorage.getItem('deadband.analystModel');
-          if (savedModel && a.models.includes(savedModel)) analystModelEl.value = savedModel;
-        } catch (err) {}
+        let savedModel = '';
+        try { savedModel = localStorage.getItem('deadband.analystModel') || ''; } catch (err) {}
+        if (savedModel && !a.models.includes(savedModel)) savedModel = '';
+        analystModel = savedModel;
+        fillMenu('analyst-model-menu', [['', 'First available']].concat(a.models.map((m) => [m, m])), savedModel);
+        setMenuField('analyst-model-field', savedModel || 'First available');
       }
     } catch (err) { /* analyst card is best-effort */ }
   }
@@ -832,7 +948,7 @@
     analystOutputEl.hidden = false;
     analystOutputEl.textContent = 'Asking the local model… this can take a minute.';
     try {
-      const r = await invoke('explain_latest_alert', { model: analystModelEl.value || null });
+      const r = await invoke('explain_latest_alert', { model: analystModel || null });
       analystOutputEl.textContent =
         'AI-GENERATED INTERPRETATION · model: ' + r.model + '\nAlert: ' + r.alert_summary +
         '\n\n' + r.narrative;
@@ -1424,6 +1540,7 @@
     });
     renderTabs();
     renderPalette();
+    if (typeof syncLaunchOptions === 'function') syncLaunchOptions();
   }
   window._dashTick = (total) => {
     window._alertsTotal = total;
@@ -1457,14 +1574,9 @@
       // (customize mode only, on-board only).
       if (customizing && onBoard) {
         if (!el.querySelector(':scope > .rz')) {
-          const arrows = { n: '↕', s: '↕', e: '↔', w: '↔', ne: '↗', nw: '↖', se: '↘', sw: '↙' };
           ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'].forEach((dir) => {
             const hd = document.createElement('div');
             hd.className = 'rz rz-' + dir;
-            const arrow = document.createElement('span');
-            arrow.className = 'rz-arrow';
-            arrow.textContent = arrows[dir];
-            hd.appendChild(arrow);
             hd.title = 'Drag to resize';
             hd.setAttribute('aria-hidden', 'true');
             hd.addEventListener('pointerdown', (e) => startWidgetResize(e, el, id, dir));
@@ -1633,54 +1745,65 @@
   });
   applyDashboard();
 
-  // ---- settings wiring ------------------------------------------------------
-  const setLaunch = document.getElementById('set-launch-dash');
+  // ---- settings wiring: exposed-dropdown menu fields ------------------------
+  const THEME_LABELS = {
+    'deadband-industrial': 'Industrial Dark — charcoal, steel blue, amber',
+    'midnight-steel': 'Midnight Steel — deep navy, soft blue, rounder',
+    'console-green': 'Console Green — terminal green on black',
+    'ember-dark': 'Ember Dark — warm charcoal, ember and copper',
+    'paper-white': 'Paper White — clean white, ink text, steel blue',
+    'daylight-steel': 'Daylight Steel — pale blue-gray, deep blue and teal',
+    'warm-light': 'Warm Light — warm off-white, copper and teal',
+    'contrast-noir': 'High Contrast Noir — black, white, yellow and cyan',
+    'contrast-paper': 'High Contrast Paper — white, black, blue and violet',
+    'contrast-amber': 'High Contrast Amber — black, amber, white and cyan',
+  };
+  const LOG_LABELS = { important: 'Important events', alerts: 'Alerts only', writes: 'Writes only', all: 'All traffic' };
+  // Theme
+  const themeNow = document.documentElement.getAttribute('theme') || 'deadband-industrial';
+  fillMenu('set-theme-menu', Object.entries(THEME_LABELS), themeNow);
+  setMenuField('set-theme-field', THEME_LABELS[themeNow] || THEME_LABELS['deadband-industrial']);
+  wireMenuField('set-theme-field', 'set-theme-menu', (v) => {
+    document.documentElement.setAttribute('theme', v);
+    try { localStorage.setItem('deadband.theme', v); } catch (err) {}
+  });
+  // Dashboard shown at launch (rebuilt whenever dashboards change)
   function syncLaunchOptions() {
-    if (!setLaunch) return;
-    const current = setLaunch.value;
-    setLaunch.innerHTML = '';
-    dashboards.forEach((d) => {
-      const opt = document.createElement('option');
-      opt.value = d.id; opt.textContent = d.name;
-      setLaunch.appendChild(opt);
-    });
-    try { setLaunch.value = localStorage.getItem('deadband.launchDash') || dashboards[0].id; }
-    catch (err) { setLaunch.value = current || dashboards[0].id; }
+    let pref = dashboards[0].id;
+    try { pref = localStorage.getItem('deadband.launchDash') || dashboards[0].id; } catch (err) {}
+    if (!dashboards.some((d) => d.id === pref)) pref = dashboards[0].id;
+    fillMenu('set-launch-menu', dashboards.map((d) => [d.id, d.name]), pref);
+    const d = dashboards.find((x) => x.id === pref);
+    if (d) setMenuField('set-launch-field', d.name);
   }
   syncLaunchOptions();
-  if (setLaunch) setLaunch.addEventListener('change', () => {
-    try { localStorage.setItem('deadband.launchDash', setLaunch.value); } catch (err) {}
+  wireMenuField('set-launch-field', 'set-launch-menu', (v) => {
+    try { localStorage.setItem('deadband.launchDash', v); } catch (err) {}
   });
-  const setTheme = document.getElementById('set-theme');
-  if (setTheme) {
-    setTheme.value = document.documentElement.getAttribute('theme') || 'deadband-industrial';
-    setTheme.addEventListener('change', () => {
-      document.documentElement.setAttribute('theme', setTheme.value);
-      try { localStorage.setItem('deadband.theme', setTheme.value); } catch (err) {}
-    });
-  }
-  const setLogFilter = document.getElementById('set-log-filter');
-  if (setLogFilter) {
-    try { setLogFilter.value = localStorage.getItem('deadband.logFilter') || 'important'; } catch (err) {}
-    setLogFilter.addEventListener('change', () => {
-      try { localStorage.setItem('deadband.logFilter', setLogFilter.value); } catch (err) {}
-      const chip = document.querySelector('#log-filters .chip-btn[data-filter="' + setLogFilter.value + '"]');
-      if (chip) chip.click();
-    });
-  }
-  const setModel = document.getElementById('set-analyst-model');
-  if (setModel && invoke) {
+  // Event log opens on
+  let logPref = 'important';
+  try { logPref = localStorage.getItem('deadband.logFilter') || 'important'; } catch (err) {}
+  fillMenu('set-log-menu', Object.entries(LOG_LABELS), logPref);
+  setMenuField('set-log-field', LOG_LABELS[logPref] || LOG_LABELS.important);
+  wireMenuField('set-log-field', 'set-log-menu', (v) => {
+    try { localStorage.setItem('deadband.logFilter', v); } catch (err) {}
+    const chip = document.querySelector('#log-filters .chip-btn[data-filter="' + v + '"]');
+    if (chip) chip.click();
+  });
+  // Preferred analyst model (populated once Ollama answers)
+  fillMenu('set-model-menu', [['', 'First available']], '');
+  wireMenuField('set-model-field', 'set-model-menu', (v) => {
+    analystModel = v;
+    try { localStorage.setItem('deadband.analystModel', v); } catch (err) {}
+    setMenuField('analyst-model-field', v || 'First available');
+  });
+  if (invoke) {
     invoke('analyst_status').then((a) => {
-      (a.models || []).forEach((m) => {
-        const opt = document.createElement('option');
-        opt.value = m; opt.textContent = m;
-        setModel.appendChild(opt);
-      });
-      try { setModel.value = localStorage.getItem('deadband.analystModel') || ''; } catch (err) {}
+      let pref = '';
+      try { pref = localStorage.getItem('deadband.analystModel') || ''; } catch (err) {}
+      fillMenu('set-model-menu', [['', 'First available']].concat((a.models || []).map((m) => [m, m])), pref);
+      setMenuField('set-model-field', pref || 'First available');
     }).catch(() => {});
-    setModel.addEventListener('change', () => {
-      try { localStorage.setItem('deadband.analystModel', setModel.value); } catch (err) {}
-    });
   }
   const dataStats = document.getElementById('data-stats');
   async function loadDataStats() {
@@ -1692,24 +1815,37 @@
   }
   loadDataStats();
   setInterval(loadDataStats, 10000);
+  // Wiping stored data is destructive, so it takes more than a second
+  // click: the user has to type CLEAR. A stray double-click can never
+  // wipe the plant's learned baselines by accident.
   const btnClear = document.getElementById('btn-clear-data');
   const clearStatus = document.getElementById('clear-status');
-  let clearArmed = false, clearTimer = null;
-  if (btnClear) btnClear.addEventListener('click', async () => {
-    if (!invoke) return;
-    if (!clearArmed) {
-      clearArmed = true;
-      btnClear.textContent = 'Click again to confirm wipe';
-      if (clearStatus) clearStatus.textContent = 'This erases everything Deadband has learned on this machine.';
-      clearTimer = setTimeout(() => {
-        clearArmed = false;
-        btnClear.textContent = 'Clear stored data';
-      }, 6000);
-      return;
+  const clearConfirm = document.getElementById('clear-confirm');
+  const clearInput = document.getElementById('clear-confirm-input');
+  const btnClearConfirm = document.getElementById('btn-clear-confirm');
+  const btnClearCancel = document.getElementById('btn-clear-cancel');
+  function resetClearConfirm() {
+    if (clearConfirm) clearConfirm.hidden = true;
+    if (clearInput) clearInput.value = '';
+    if (btnClearConfirm) btnClearConfirm.setAttribute('disabled', '');
+  }
+  if (btnClear) btnClear.addEventListener('click', () => {
+    if (!invoke || !clearConfirm) return;
+    clearConfirm.hidden = false;
+    if (clearInput) clearInput.focus();
+  });
+  if (clearInput) clearInput.addEventListener('input', () => {
+    if (!btnClearConfirm) return;
+    if (clearInput.value.trim().toUpperCase() === 'CLEAR') {
+      btnClearConfirm.removeAttribute('disabled');
+    } else {
+      btnClearConfirm.setAttribute('disabled', '');
     }
-    clearTimeout(clearTimer);
-    clearArmed = false;
-    btnClear.textContent = 'Clear stored data';
+  });
+  if (btnClearCancel) btnClearCancel.addEventListener('click', resetClearConfirm);
+  if (btnClearConfirm) btnClearConfirm.addEventListener('click', async () => {
+    if (!invoke || btnClearConfirm.hasAttribute('disabled')) return;
+    resetClearConfirm();
     try {
       await invoke('clear_data');
       if (clearStatus) clearStatus.textContent = 'Cleared. Baselines will relearn from zero.';

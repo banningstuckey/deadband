@@ -96,6 +96,7 @@ class NMUINavigation extends HTMLElement {
 
   disconnectedCallback() {
     document.removeEventListener("keydown", this.#onKey);
+    this._selObserver?.disconnect();
   }
 
   // -- rail -------------------------------------------------------------------
@@ -195,6 +196,19 @@ class NMUINavigation extends HTMLElement {
         document.addEventListener("keydown", this.#onKey);
       }
     }
+
+    // Group parents carry [data-group-active] while one of
+    // their children is selected, so the rail shows which
+    // section the current page belongs to. Selection can
+    // arrive from a click (#select) or from the app syncing
+    // [selected] directly, so watch the attribute too.
+    this.#syncGroupActive();
+    this._selObserver = new MutationObserver(() => this.#syncGroupActive());
+    this._selObserver.observe(destinations, {
+      attributes: true,
+      attributeFilter: ["selected"],
+      subtree: true,
+    });
 
     this.#inited = true;
   }
@@ -311,12 +325,33 @@ class NMUINavigation extends HTMLElement {
     };
   }
 
+  /**
+   * Mark each group parent whose section holds the selected
+   * destination. The parent is the visible stand-in for its
+   * section, so the rail reads which section you're in.
+   */
+  #syncGroupActive() {
+    const destinations = this.querySelector("destinations");
+    if (!destinations) return;
+    destinations.querySelectorAll("section").forEach((group) => {
+      const parent = group.previousElementSibling;
+      if (!parent?.matches("a, button")) return;
+      const active = !!group.querySelector("[selected]");
+      parent.toggleAttribute("data-group-active", active);
+    });
+  }
+
   #select(dest) {
-    const dests = dest.parentElement;
-    [...dests.children].forEach((d) => {
+    // One selected destination at a time, across the whole
+    // rail — a section child and a top-level item must never
+    // both wear the pill. (Clearing only within the
+    // destination's own parent left a stale [selected] on
+    // the other side of a group boundary.)
+    this.querySelectorAll("destinations [selected]").forEach((d) => {
       if (d !== dest) d.removeAttribute("selected");
     });
     dest.setAttribute("selected", "");
+    this.#syncGroupActive();
     this.dispatchEvent(
       new CustomEvent("change", {
         detail: {

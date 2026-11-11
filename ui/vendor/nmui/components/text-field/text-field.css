@@ -1,0 +1,425 @@
+/* nmui-text-field — M3 text field over a native input /
+   textarea + label.
+   Container 56dp; padding 16dp (12dp with icons, 16dp gap
+   to the text); label body-large resting, body-small
+   floated; input body-large; supporting/counter body-small.
+   Filled: surface-container-highest, 4dp top corners, a
+   bottom active indicator (1dp on-surface-variant, 2dp
+   primary on focus). Outlined: a three-piece frame whose
+   top edge grows a notch (--notch, measured in JS) for the
+   floated label. Colors are the token mapping per state —
+   disabled is painted per part, never as host opacity. */
+
+/* The notch width travels as an unregistered custom property
+   on <field>: an @property registration with inherits: false
+   would stop the frame pieces (children of <field>) from ever
+   seeing the measured value — they would sit at the initial
+   0px forever and the top line would never break. The pieces
+   animate the change through transitions on their own
+   width / inset instead. */
+
+nmui-text-field {
+  display: inline-flex;
+  flex-direction: column;
+  min-width: 210px;
+  position: relative;
+  text-align: start;
+}
+
+/* --- the container ------------------------------------------ */
+
+nmui-text-field > field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  column-gap: 16px;
+  min-height: 56px;
+  box-sizing: border-box;
+  padding: 8px 16px;
+  border-radius: var(--md-sys-shape-corner-extra-small-top, 4px 4px 0 0);
+  background-color: var(--md-sys-color-surface-container-highest, #e6e0e9);
+  transition: background-color var(--md-sys-motion-spring-fast-effects, 150ms cubic-bezier(0.2, 0, 0, 1));
+}
+
+nmui-text-field[has-leading] > field {
+  padding-inline-start: 12px;
+}
+
+nmui-text-field[has-trailing] > field {
+  padding-inline-end: 12px;
+}
+
+/* Filled hover: an 8% on-surface layer over the container. */
+nmui-text-field:not([outlined]):not([disabled]):hover > field {
+  background-color: color-mix(in srgb,
+    var(--md-sys-color-on-surface, #1d1b20) 8%,
+    var(--md-sys-color-surface-container-highest, #e6e0e9));
+}
+
+/* Active indicator (filled): the bottom line. */
+nmui-text-field:not([outlined]) > field::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background-color: var(--md-sys-color-on-surface-variant, #49454f);
+  transition: background-color 150ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+nmui-text-field:not([outlined]):not([disabled]):hover > field::after {
+  background-color: var(--md-sys-color-on-surface, #1d1b20);
+}
+
+nmui-text-field:not([outlined])[focused] > field::after {
+  height: 2px;
+  background-color: var(--md-sys-color-primary, #6750a4);
+}
+
+nmui-text-field[error]:not([outlined]) > field::after {
+  background-color: var(--md-sys-color-error, #ba1a1a);
+}
+
+nmui-text-field[error]:not([outlined]):not([disabled]):hover > field::after {
+  background-color: var(--md-sys-color-on-error-container, #93000a);
+}
+
+/* --- outlined frame (three pieces + notch) -------------------- */
+
+nmui-text-field[outlined] > field {
+  background-color: transparent;
+  border-radius: 0;
+}
+
+nmui-text-field[outlined] > field > frame-start,
+nmui-text-field[outlined] > field > frame-notch,
+nmui-text-field[outlined] > field > frame-end {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+nmui-text-field[outlined] > field > frame-start {
+  inset-inline-start: 0;
+  width: 12px;
+  border: 1px solid var(--md-sys-color-outline, #79747e);
+  border-inline-end: none;
+  border-start-start-radius: var(--md-sys-shape-corner-extra-small, 4px);
+  border-end-start-radius: var(--md-sys-shape-corner-extra-small, 4px);
+}
+
+nmui-text-field[outlined] > field > frame-notch {
+  inset-inline-start: 12px;
+  width: var(--notch, 0px);
+  border-top: 1px solid var(--md-sys-color-outline, #79747e);
+  border-bottom: 1px solid var(--md-sys-color-outline, #79747e);
+  transition: width 150ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* The notch's top edge is the gap the floated label sits in. */
+nmui-text-field[outlined][floated] > field > frame-notch {
+  border-top-color: transparent;
+}
+
+nmui-text-field[outlined] > field > frame-end {
+  inset-inline-start: calc(12px + var(--notch, 0px));
+  inset-inline-end: 0;
+  border: 1px solid var(--md-sys-color-outline, #79747e);
+  border-inline-start: none;
+  border-start-end-radius: var(--md-sys-shape-corner-extra-small, 4px);
+  border-end-end-radius: var(--md-sys-shape-corner-extra-small, 4px);
+  transition: inset-inline-start 150ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+nmui-text-field[outlined]:not([disabled]):hover > field > frame-start,
+nmui-text-field[outlined]:not([disabled]):hover > field > frame-notch,
+nmui-text-field[outlined]:not([disabled]):hover > field > frame-end {
+  border-color: var(--md-sys-color-on-surface, #1d1b20);
+}
+
+nmui-text-field[outlined]:not([disabled]):hover > field > frame-notch {
+  border-top-color: var(--md-sys-color-on-surface, #1d1b20);
+}
+
+nmui-text-field[outlined][floated]:hover > field > frame-notch {
+  border-top-color: transparent;
+}
+
+nmui-text-field[outlined][focused] > field > frame-start,
+nmui-text-field[outlined][focused] > field > frame-notch,
+nmui-text-field[outlined][focused] > field > frame-end {
+  border-color: var(--md-sys-color-primary, #6750a4);
+  border-width: 2px;
+}
+
+nmui-text-field[outlined][error] > field > frame-start,
+nmui-text-field[outlined][error] > field > frame-notch,
+nmui-text-field[outlined][error] > field > frame-end {
+  border-color: var(--md-sys-color-error, #ba1a1a);
+}
+
+nmui-text-field[outlined][error]:not([disabled]):hover > field > frame-start,
+nmui-text-field[outlined][error]:not([disabled]):hover > field > frame-notch,
+nmui-text-field[outlined][error]:not([disabled]):hover > field > frame-end {
+  border-color: var(--md-sys-color-on-error-container, #93000a);
+}
+
+nmui-text-field[outlined][error][floated] > field > frame-notch {
+  border-top-color: transparent;
+}
+
+nmui-text-field[outlined][error][floated]:hover > field > frame-notch,
+nmui-text-field[outlined][floated][focused] > field > frame-notch {
+  border-top-color: transparent;
+}
+
+/* --- label ------------------------------------------------------ */
+
+nmui-text-field > label {
+  position: absolute;
+  top: 28px;
+  inset-inline-start: 16px;
+  transform: translateY(-50%);
+  max-width: calc(100% - 32px);
+  white-space: nowrap;
+  overflow: hidden;
+  color: var(--md-sys-color-on-surface-variant, #49454f);
+  font: var(--md-sys-typescale-body-large, 400 16px/24px "Roboto", sans-serif);
+  pointer-events: none;
+  transition:
+    top 150ms cubic-bezier(0.2, 0, 0, 1),
+    font-size 150ms cubic-bezier(0.2, 0, 0, 1),
+    color 150ms cubic-bezier(0.2, 0, 0, 1);
+  z-index: 1;
+}
+
+nmui-text-field[has-leading] > label {
+  inset-inline-start: 52px;
+}
+
+nmui-text-field[floated] > label {
+  top: 16px;
+  font: var(--md-sys-typescale-body-small, 400 12px/16px "Roboto", sans-serif);
+}
+
+nmui-text-field[focused] > label {
+  color: var(--md-sys-color-primary, #6750a4);
+}
+
+/* Outlined: the floated label rides the top edge, in the notch. */
+nmui-text-field[outlined][floated] > label {
+  top: 0;
+  padding-inline: 4px;
+}
+
+/* Text areas: the resting label aligns with the first line
+   of text (whose center sits 36px down), not the middle. */
+nmui-text-field[multiline] > label {
+  top: 36px;
+}
+
+nmui-text-field[multiline][floated] > label {
+  top: 16px;
+}
+
+nmui-text-field[outlined][multiline][floated] > label {
+  top: 0;
+}
+
+/* --- input -------------------------------------------------------- */
+
+nmui-text-field > field > inputwrap {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  padding-top: 16px;
+}
+
+nmui-text-field[nolabel] > field > inputwrap {
+  padding-top: 0;
+}
+
+nmui-text-field[multiline] > field {
+  align-items: flex-start;
+}
+
+nmui-text-field[multiline] > field > inputwrap {
+  align-items: flex-start;
+}
+
+nmui-text-field > field > inputwrap > input,
+nmui-text-field > field > inputwrap > textarea {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  outline: none;
+  font: var(--md-sys-typescale-body-large, 400 16px/24px "Roboto", sans-serif);
+  color: var(--md-sys-color-on-surface, #1d1b20);
+  caret-color: var(--md-sys-color-primary, #6750a4);
+}
+
+nmui-text-field > field > inputwrap > textarea {
+  resize: vertical;
+}
+
+nmui-text-field > field > inputwrap > input::placeholder,
+nmui-text-field > field > inputwrap > textarea::placeholder {
+  color: var(--md-sys-color-on-surface-variant, #49454f);
+}
+
+/* With a label, the placeholder waits until the label floats. */
+nmui-text-field:not([nolabel]):not([focused]) > field > inputwrap > input::placeholder,
+nmui-text-field:not([nolabel]):not([focused]) > field > inputwrap > textarea::placeholder {
+  opacity: 0;
+}
+
+nmui-text-field > field > inputwrap > input::selection,
+nmui-text-field > field > inputwrap > textarea::selection {
+  background-color: color-mix(in srgb, var(--md-sys-color-primary, #6750a4) 25%, transparent);
+}
+
+nmui-text-field[error] > field > inputwrap > input,
+nmui-text-field[error] > field > inputwrap > textarea {
+  caret-color: var(--md-sys-color-error, #ba1a1a);
+}
+
+/* Prefix / suffix: visible once the label has floated. */
+nmui-text-field > field > inputwrap > [prefix],
+nmui-text-field > field > inputwrap > [suffix] {
+  font: var(--md-sys-typescale-body-large, 400 16px/24px "Roboto", sans-serif);
+  color: var(--md-sys-color-on-surface-variant, #49454f);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 150ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+nmui-text-field > field > inputwrap > [prefix] {
+  margin-inline-end: 4px;
+}
+
+nmui-text-field > field > inputwrap > [suffix] {
+  margin-inline-start: 4px;
+}
+
+nmui-text-field[floated] > field > inputwrap > [prefix],
+nmui-text-field[floated] > field > inputwrap > [suffix] {
+  opacity: 1;
+}
+
+/* --- icons ---------------------------------------------------------- */
+
+nmui-text-field > field > icon {
+  flex: 0 0 auto;
+  font-size: 24px;
+  line-height: 1;
+  color: var(--md-sys-color-on-surface-variant, #49454f);
+}
+
+nmui-text-field[multiline] > field > icon {
+  margin-top: 16px;
+}
+
+/* The auto error icon only shows in the error state. */
+nmui-text-field > field > icon[error-icon] {
+  display: none;
+  color: var(--md-sys-color-error, #ba1a1a);
+}
+
+nmui-text-field[error] > field > icon[error-icon] {
+  display: inline-flex;
+}
+
+/* Authored trailing icons take the error color in error state. */
+nmui-text-field[error] > field > icon[trailing] {
+  color: var(--md-sys-color-error, #ba1a1a);
+}
+
+/* Interactive trailing elements (buttons) keep their own size. */
+nmui-text-field > field > [trailing]:is(button, nmui-button) {
+  flex: 0 0 auto;
+}
+
+/* --- supporting row ---------------------------------------------------- */
+
+nmui-text-field > supporting {
+  display: flex;
+  column-gap: 16px;
+  padding: 4px 16px 0;
+  font: var(--md-sys-typescale-body-small, 400 12px/16px "Roboto", sans-serif);
+  color: var(--md-sys-color-on-surface-variant, #49454f);
+}
+
+nmui-text-field > supporting > small {
+  font: inherit;
+}
+
+/* Error text replaces supporting text — never both. */
+nmui-text-field > supporting > small[error] {
+  display: none;
+}
+
+nmui-text-field[error] > supporting > small[error] {
+  display: block;
+  color: var(--md-sys-color-error, #ba1a1a);
+}
+
+nmui-text-field[error] > supporting > small:not([error]) {
+  display: none;
+}
+
+nmui-text-field > supporting > counter {
+  margin-inline-start: auto;
+  white-space: nowrap;
+}
+
+nmui-text-field > supporting > counter[over] {
+  color: var(--md-sys-color-error, #ba1a1a);
+}
+
+/* --- error label -------------------------------------------------------- */
+
+nmui-text-field[error] > label {
+  color: var(--md-sys-color-error, #ba1a1a);
+}
+
+/* --- disabled (tokens, per part) ------------------------------------------ */
+
+nmui-text-field[disabled] > field {
+  background-color: color-mix(in srgb, var(--md-sys-color-on-surface, #1d1b20) 4%, transparent);
+}
+
+nmui-text-field[disabled][outlined] > field {
+  background-color: transparent;
+}
+
+nmui-text-field[disabled]:not([outlined]) > field::after {
+  background-color: color-mix(in srgb, var(--md-sys-color-on-surface, #1d1b20) 38%, transparent);
+}
+
+nmui-text-field[disabled][outlined] > field > frame-start,
+nmui-text-field[disabled][outlined] > field > frame-notch,
+nmui-text-field[disabled][outlined] > field > frame-end {
+  border-color: color-mix(in srgb, var(--md-sys-color-on-surface, #1d1b20) 12%, transparent);
+}
+
+nmui-text-field[disabled][error] > field > icon[error-icon] {
+  color: color-mix(in srgb, var(--md-sys-color-on-surface, #1d1b20) 38%, transparent);
+}
+
+nmui-text-field[disabled] > label,
+nmui-text-field[disabled] > supporting,
+nmui-text-field[disabled] > field > icon,
+nmui-text-field[disabled] > field > inputwrap > input,
+nmui-text-field[disabled] > field > inputwrap > textarea,
+nmui-text-field[disabled] > field > inputwrap > [prefix],
+nmui-text-field[disabled] > field > inputwrap > [suffix] {
+  color: color-mix(in srgb, var(--md-sys-color-on-surface, #1d1b20) 38%, transparent);
+}
