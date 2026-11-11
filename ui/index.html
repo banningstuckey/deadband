@@ -116,7 +116,7 @@
           </div>
           <p class="dim">Bands are Purdue levels; the dashed band is the IT/OT DMZ.
           Lines are <strong>conduits</strong> — the observed paths traffic takes between
-          zones — and they pulse as packets flow. Scroll to zoom, drag to pan,
+          zones — and they pulse as packets flow. Use + / \u2212 to zoom, drag to pan,
           double-click a device to zoom to it; zooming in past 2× also labels
           each conduit with its protocol and port. Click a device or a conduit for
           detail, then jump straight to its events in the log.
@@ -1487,26 +1487,18 @@
   function zoomMapCenter(factor) {
     zoomMapAt(mapView.x + mapView.w / 2, mapView.y + mapView.h / 2, factor);
   }
-  function svgPoint(clientX, clientY) {
-    const r = svg.getBoundingClientRect();
-    const w = r.width || MAP_W, h = r.height || MAP_H;
-    return {
-      x: mapView.x + (clientX - r.left) / w * mapView.w,
-      y: mapView.y + (clientY - r.top) / h * mapView.h,
-    };
-  }
-  svg.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    const p = svgPoint(e.clientX, e.clientY);
-    zoomMapAt(p.x, p.y, e.deltaY > 0 ? 1.25 : 0.8);
-  }, { passive: false });
   let mapDrag = null;
   svg.addEventListener('pointerdown', (e) => {
+    // A new gesture starts fresh: a stale drag flag must never eat
+    // the next click (e.g. a drag that ended outside the window).
+    mapDragged = false;
     mapDrag = { x: e.clientX, y: e.clientY, vx: mapView.x, vy: mapView.y, moved: false };
     svg.classList.add('dragging');
-    if (svg.setPointerCapture) { try { svg.setPointerCapture(e.pointerId); } catch (err) {} }
   });
-  svg.addEventListener('pointermove', (e) => {
+  // Listened on the window, not the svg: the drag keeps tracking
+  // even if the pointer leaves the map, and nothing retargets the
+  // click that follows — so device clicks work again.
+  window.addEventListener('pointermove', (e) => {
     if (!mapDrag) return;
     const r = svg.getBoundingClientRect();
     const w = r.width || MAP_W, h = r.height || MAP_H;
@@ -1524,8 +1516,8 @@
     mapDrag = null;
     svg.classList.remove('dragging');
   }
-  svg.addEventListener('pointerup', endMapDrag);
-  svg.addEventListener('pointercancel', endMapDrag);
+  window.addEventListener('pointerup', endMapDrag);
+  window.addEventListener('pointercancel', endMapDrag);
   svg.addEventListener('dblclick', (e) => {
     const node = e.target.closest('.node');
     if (!node) return;
