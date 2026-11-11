@@ -52,6 +52,16 @@
       </div>
 
       <section id="view-live" class="view">
+        <nmui-card outlined class="overview-card">
+          <div class="overview-grid">
+            <div class="stat"><span class="stat-label">Plant state</span><b id="ov-state">—</b></div>
+            <div class="stat"><span class="stat-label">Risk score</span><b id="ov-risk">—</b></div>
+            <div class="stat"><span class="stat-label">Devices known</span><b id="ov-devices">—</b></div>
+            <div class="stat"><span class="stat-label">Alerts raised</span><b id="ov-alerts">—</b></div>
+          </div>
+          <p class="dim" id="ov-latest">The 10-second version: state, risk, and the latest alert — the raw detail lives in Events when you want it.</p>
+        </nmui-card>
+
         <nmui-card outlined class="map-card">
           <h2 class="card-title">Purdue map — live</h2>
           <div class="map-scroll">
@@ -139,6 +149,14 @@
 
         <nmui-card outlined class="log-card">
           <h2 class="card-title">Live event log</h2>
+          <div class="filter-row" id="log-filters">
+            <button class="chip-btn" data-filter="important" selected>Important</button>
+            <button class="chip-btn" data-filter="alerts">Alerts</button>
+            <button class="chip-btn" data-filter="writes">Writes</button>
+            <button class="chip-btn" data-filter="all">All traffic</button>
+          </div>
+          <p class="dim">"Important" is the default — alerts, writes, new devices, analyst
+          notes. The full firehose (every routine read) is under "All traffic".</p>
           <div id="event-log" class="event-log">
             <p class="dim" id="log-empty">No events yet — start the simulation and Modbus traffic will stream in here.</p>
           </div>
@@ -286,10 +304,30 @@
     return new Date(tsSeconds * 1000).toLocaleTimeString([], { hour12: false });
   }
 
+  let logFilter = 'important';
+  function rowVisible(kind) {
+    if (logFilter === 'all') return true;
+    if (logFilter === 'alerts') return kind === 'alert' || kind === 'analyst';
+    if (logFilter === 'writes') return kind === 'write';
+    return kind === 'alert' || kind === 'write' || kind === 'discovery' || kind === 'analyst';
+  }
+  document.querySelectorAll('#log-filters .chip-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      logFilter = btn.dataset.filter;
+      document.querySelectorAll('#log-filters .chip-btn')
+        .forEach((b) => b.toggleAttribute('selected', b === btn));
+      logEl.querySelectorAll('.log-row').forEach((row) => {
+        const kind = (row.className.match(/kind-(\w+)/) || [])[1];
+        row.style.display = rowVisible(kind) ? '' : 'none';
+      });
+    });
+  });
+
   function addRow(dto, prepend) {
     if (emptyEl) emptyEl.remove();
     const row = document.createElement('div');
     row.className = 'log-row kind-' + dto.kind;
+    row.style.display = rowVisible(dto.kind) ? '' : 'none';
     const time = document.createElement('span');
     time.className = 'log-time';
     time.textContent = fmtTime(dto.timestamp);
@@ -371,6 +409,32 @@
     showReplayStatus(await invoke('stop_replay'));
   });
   setInterval(refreshReplayStatus, 1000);
+
+  // ---- overview strip (Live view) -----------------------------------------
+  async function loadOverview() {
+    if (!invoke) return;
+    try {
+      const [rules, anomaly, snap, recent] = await Promise.all([
+        invoke('rules_status'), invoke('anomaly_status'),
+        invoke('network_snapshot'), invoke('recent_events', { limit: 100 }),
+      ]);
+      const latestAlert = recent.find((e) => e.kind === 'alert');
+      const stateEl = document.getElementById('ov-state');
+      const state = anomaly.risk_score >= 50 || rules.alerts_total > 0
+        ? 'Needs attention' : anomaly.learning ? 'Learning' : 'Quiet';
+      stateEl.textContent = state;
+      stateEl.className = state === 'Quiet' ? 'ov-ok' : state === 'Learning' ? 'ov-warn' : 'ov-bad';
+      document.getElementById('ov-risk').textContent =
+        anomaly.risk_score + (anomaly.learning ? ' (learning)' : '');
+      document.getElementById('ov-devices').textContent = snap.devices.length;
+      document.getElementById('ov-alerts').textContent = rules.alerts_total;
+      document.getElementById('ov-latest').textContent = latestAlert
+        ? 'Latest alert: ' + latestAlert.summary
+        : 'No alerts yet — normal traffic stays quiet. The raw detail lives in Events when you want it.';
+    } catch (err) { /* overview is best-effort */ }
+  }
+  loadOverview();
+  setInterval(loadOverview, 5000);
 
   // ---- rules + scenarios --------------------------------------------------
   const anomalyStatusEl = document.getElementById('anomaly-status');
