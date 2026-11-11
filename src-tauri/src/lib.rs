@@ -445,7 +445,6 @@ fn capture_status_of(state: &AppState) -> CaptureStatus {
     }
 }
 
-#[cfg(feature = "live-capture")]
 fn list_interfaces_inner() -> Result<Vec<InterfaceDto>, String> {
     deadband_core::capture::list_interfaces().map(|ifs| {
         ifs.into_iter()
@@ -456,11 +455,6 @@ fn list_interfaces_inner() -> Result<Vec<InterfaceDto>, String> {
             })
             .collect()
     })
-}
-
-#[cfg(not(feature = "live-capture"))]
-fn list_interfaces_inner() -> Result<Vec<InterfaceDto>, String> {
-    Err("Live capture is not enabled in this build.".to_string())
 }
 
 /// The interfaces libpcap can capture on. Listing needs no capture
@@ -517,7 +511,6 @@ fn capture_status(state: tauri::State<AppState>) -> CaptureStatus {
 /// a running capture goes quiet, record one alert event (it shows in
 /// the Events log, the bell and the latest-alert line) and latch it
 /// until traffic resumes.
-#[cfg(feature = "live-capture")]
 fn check_capture_health(
     store: &Arc<Mutex<deadband_core::store::Store>>,
     info_handle: &Arc<Mutex<CaptureInfo>>,
@@ -562,7 +555,6 @@ fn check_capture_health(
     let _ = app.emit("traffic", EventDto::from(&event));
 }
 
-#[cfg(feature = "live-capture")]
 fn spawn_capture_thread(
     app: tauri::AppHandle,
     state: &AppState,
@@ -650,18 +642,6 @@ fn spawn_capture_thread(
     });
 }
 
-#[cfg(not(feature = "live-capture"))]
-fn spawn_capture_thread(
-    _app: tauri::AppHandle,
-    state: &AppState,
-    _interface: String,
-) {
-    state.capture_running.store(false, Ordering::Relaxed);
-    if let Ok(mut info) = state.capture_info.lock() {
-        info.message =
-            Some("Live capture is not enabled in this build.".to_string());
-    }
-}
 
 /// One rule, for the Rules view.
 #[derive(Debug, Serialize)]
