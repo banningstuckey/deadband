@@ -18,7 +18,7 @@ from pathlib import Path
 SRC = Path(sys.argv[1] if len(sys.argv) > 1 else "~/workspace/nmui").expanduser()
 DST = Path(__file__).resolve().parent.parent / "ui" / "vendor" / "nmui"
 CSS = ["tokens", "typography", "motion", "base"]
-COMPONENTS = ["navigation", "button", "card", "badge", "divider", "tabs", "menu", "text-field"]
+COMPONENTS = ["navigation", "button", "card", "badge", "divider", "tabs", "menu", "text-field", "switch"]
 HEADER = re.compile(
     r'import \w+ from "\./[\w-]+\.css" with \{ type: "css" \};\n\n'
     r'if \(!document\.adoptedStyleSheets\.includes\(\w+\)\) \{\n'

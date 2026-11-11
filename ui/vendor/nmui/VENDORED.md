@@ -51,7 +51,13 @@ preset; this file belongs to Deadband, not to nmui).
 
 Components (`components/`, each an `x.js` + `x.css` pair, imported by
 the app where used): `navigation`, `button`, `card`, `badge`, `divider`,
-`tabs`, `menu`, `text-field`.
+`tabs`, `menu`, `text-field`, `switch` — the switch was added 2026-11-11
+as a single component (not a full re-vendor) for the log query bar's AI
+mode, from the then-current local nmui checkout (newer than the v0.43.7
+pin); it is self-contained, with no cross-component dependencies, and
+was vendored with the same header-strip transform. It is in
+`tools/vendor_nmui.py`'s component list, so the next full re-vendor
+keeps it.
 
 ## Known gap — icon font
 

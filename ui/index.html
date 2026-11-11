@@ -27,6 +27,7 @@
 <link rel="stylesheet" href="./vendor/nmui/components/tabs/tabs.css">
 <link rel="stylesheet" href="./vendor/nmui/components/menu/menu.css">
 <link rel="stylesheet" href="./vendor/nmui/components/text-field/text-field.css">
+<link rel="stylesheet" href="./vendor/nmui/components/switch/switch.css">
 <link rel="stylesheet" href="./app.css">
 <script type="module">
   import "./vendor/nmui/components/navigation/navigation.js";
@@ -37,6 +38,7 @@
   import "./vendor/nmui/components/tabs/tabs.js";
   import "./vendor/nmui/components/menu/menu.js";
   import "./vendor/nmui/components/text-field/text-field.js";
+  import "./vendor/nmui/components/switch/switch.js";
 </script>
 </head>
 <body>
@@ -44,7 +46,7 @@
     <img id="splash-logo" src="./assets/deadband-logo.jpg" alt="Deadband"
          onerror="var s=document.getElementById('splash'); if(s) s.remove();">
     <p class="splash-sub">Real-time passive OT network monitor</p>
-    <p class="splash-version" id="splash-version">Deadband v0.1.7</p>
+    <p class="splash-version" id="splash-version">Deadband v0.1.8</p>
   </div>
   <div class="shell">
     <nmui-navigation rail expanded id="rail">
@@ -265,20 +267,15 @@
           </div>
           <div class="query-bar">
             <div class="query-input-wrap">
-              <input id="query-input" class="text-input query-input" type="text" spellcheck="false"
-                placeholder="Query the log — kind:write dst:10.0.1.11 last:1h (Enter to run)"
-                autocomplete="off" aria-label="Query the event log">
+              <nmui-text-field outlined id="query-field">
+                <input id="query-input" class="text-input query-input" type="text" spellcheck="false"
+                  placeholder="Query the log — kind:write dst:10.0.1.11 last:1h (Enter to run)"
+                  autocomplete="off" aria-label="Query the event log">
+                <button trailing id="query-search" aria-label="Search" title="Search"><svg class="field-ic" viewBox="0 -960 960 960" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z"/></svg></button>
+              </nmui-text-field>
               <div class="query-suggest" id="query-suggest" hidden></div>
             </div>
-            <button class="chip-btn" id="query-run">Search</button>
-            <button class="chip-btn" id="query-ai-toggle" aria-label="Ask in plain English" title="Ask in plain English">&#10022; AI</button>
-          </div>
-          <div class="query-ai" id="query-ai" hidden>
-            <input id="query-ai-input" class="text-input query-input" type="text" spellcheck="false"
-              placeholder="Ask in plain English — e.g. writes to PLC1 from anything but the HMI"
-              autocomplete="off" aria-label="Ask the local model in plain English">
-            <button class="chip-btn" id="query-ai-ask">Ask</button>
-            <span class="dim" id="query-ai-status"></span>
+            <nmui-switch><input type="checkbox" id="query-ai-switch">AI</nmui-switch>
           </div>
           <div class="filter-row" id="query-status" hidden>
             <span class="dim">Query: <strong id="query-status-text"></strong> — <span id="query-status-count"></span></span>
@@ -460,7 +457,7 @@
         </nmui-card>
       </section>
 
-      <footer class="note">Deadband v0.1.7 · UI: nmui v0.43.7, vendored and pinned (ui/vendor/nmui) · Themes selectable in Settings</footer>
+      <footer class="note">Deadband v0.1.8 · UI: nmui v0.43.7, vendored and pinned (ui/vendor/nmui) · Themes selectable in Settings</footer>
     </main>
   </div>
 
@@ -651,12 +648,8 @@
   const queryStatusRow = document.getElementById('query-status');
   const queryStatusText = document.getElementById('query-status-text');
   const queryStatusCount = document.getElementById('query-status-count');
-  const queryAiRow = document.getElementById('query-ai');
-  const queryAiInput = document.getElementById('query-ai-input');
-  const queryAiStatus = document.getElementById('query-ai-status');
-  const queryAiAsk = document.getElementById('query-ai-ask');
-  const queryAiToggle = document.getElementById('query-ai-toggle');
-  const queryInputWrap = document.querySelector('.query-input-wrap');
+  const querySearchBtn = document.getElementById('query-search');
+  const aiSwitch = document.getElementById('query-ai-switch');
 
   async function loadBacklog() {
     if (!invoke) return;
@@ -705,8 +698,6 @@
     loadBacklog();
   }
 
-  const queryRunBtn = document.getElementById('query-run');
-  if (queryRunBtn) queryRunBtn.addEventListener('click', () => runQuery(queryInputEl.value));
   const queryStatusClear = document.getElementById('query-status-clear');
   if (queryStatusClear) queryStatusClear.addEventListener('click', clearQuery);
 
@@ -750,6 +741,7 @@
   }
   function renderQuerySuggest() {
     if (!queryInputEl || !querySuggestEl) return;
+    if (aiSwitch && aiSwitch.checked) { querySuggestEl.hidden = true; return; }
     const { token } = queryTokenAt(queryInputEl);
     querySuggestItems = querySuggestions(token);
     querySuggestIdx = -1;
@@ -807,7 +799,7 @@
           insertQuerySuggestion(querySuggestIdx);
         } else {
           querySuggestEl.hidden = true;
-          runQuery(queryInputEl.value);
+          submitQuery();
         }
       } else if (e.key === 'Tab') {
         if (!querySuggestEl.hidden && querySuggestIdx >= 0) {
@@ -820,42 +812,47 @@
     });
   }
 
-  // ---- plain-English query (local AI) -------------------------------
-  // Opening the AI row hides the query bar's input + Search — two
-  // search boxes at once is one too many. The ✦ AI toggle stays put
-  // (it is the way back); closing restores the bar.
-  function setAiOpen(open) {
-    if (queryAiRow) queryAiRow.hidden = !open;
-    if (queryAiToggle) queryAiToggle.toggleAttribute('selected', open);
-    if (queryInputWrap) queryInputWrap.hidden = open;
-    if (queryRunBtn) queryRunBtn.hidden = open;
-    if (open && queryAiInput) queryAiInput.focus();
+  // ---- AI mode (the switch beside the field) ------------------------
+  // One field, two jobs: with the switch off it runs the query
+  // directly; with it on, the same field takes plain English and the
+  // local model translates it first. The magnifier (or Enter) runs
+  // whichever job the switch selects.
+  const QUERY_PLACEHOLDER = 'Query the log — kind:write dst:10.0.1.11 last:1h (Enter to run)';
+  const AI_PLACEHOLDER = 'Ask in plain English — e.g. writes to PLC1 from anything but the HMI';
+  function setAiMode(on) {
+    if (!queryInputEl) return;
+    queryInputEl.placeholder = on ? AI_PLACEHOLDER : QUERY_PLACEHOLDER;
+    queryInputEl.setAttribute('aria-label', on ? 'Ask the local model in plain English' : 'Query the event log');
+    if (on) queryInputEl.focus();
   }
-  if (queryAiToggle) queryAiToggle.addEventListener('click', () => {
-    setAiOpen(queryAiRow.hidden);
-  });
+  if (aiSwitch) aiSwitch.addEventListener('change', () => setAiMode(aiSwitch.checked));
   async function askAi() {
-    if (!queryAiInput) return;
-    const text = queryAiInput.value.trim();
+    if (!queryInputEl) return;
+    const text = queryInputEl.value.trim();
     if (!text) return;
-    if (queryAiAsk) queryAiAsk.disabled = true;
-    if (queryAiStatus) queryAiStatus.textContent = 'Asking the local model…';
+    if (querySearchBtn) querySearchBtn.disabled = true;
+    if (queryStatusText) queryStatusText.textContent = text;
+    if (queryStatusCount) queryStatusCount.textContent = 'Asking the local model…';
+    if (queryStatusRow) queryStatusRow.hidden = false;
     try {
       const res = await invoke('translate_query', { text, model: analystModel || null });
-      if (queryInputEl) queryInputEl.value = res.query;
-      if (queryAiStatus) queryAiStatus.textContent = '';
-      setAiOpen(false);
+      queryInputEl.value = res.query;
       await runQuery(res.query);
     } catch (err) {
-      if (queryAiStatus) queryAiStatus.textContent = String(err);
+      if (queryStatusText) queryStatusText.textContent = text;
+      if (queryStatusCount) queryStatusCount.textContent = 'Error: ' + err;
+      if (queryStatusRow) queryStatusRow.hidden = false;
     } finally {
-      if (queryAiAsk) queryAiAsk.disabled = false;
+      if (querySearchBtn) querySearchBtn.disabled = false;
     }
   }
-  if (queryAiAsk) queryAiAsk.addEventListener('click', askAi);
-  if (queryAiInput) queryAiInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') askAi();
-  });
+  async function submitQuery() {
+    if (!queryInputEl) return;
+    if (aiSwitch && aiSwitch.checked) { await askAi(); return; }
+    querySuggestEl.hidden = true;
+    runQuery(queryInputEl.value);
+  }
+  if (querySearchBtn) querySearchBtn.addEventListener('click', submitQuery);
 
   try {
     const savedFilter = localStorage.getItem('deadband.logFilter');

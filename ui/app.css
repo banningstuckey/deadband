@@ -97,13 +97,32 @@ main {
    chip never visually cleared). Same pattern as .view[hidden] below. */
 .filter-row[hidden] { display: none; }
 
-/* Log query bar: structured search over stored events, with
-   autocomplete and a plain-English (local AI) toggle. The [hidden]
-   overrides matter — display:flex/grid beat the browser's built-in
-   [hidden] rule (the device-filter chip taught us that). */
+/* Log query bar: one search field (an nmui-text-field with the
+   magnifier as its trailing button) plus an AI switch beside it.
+   The [hidden] overrides matter — display:flex/grid beat the
+   browser's built-in [hidden] rule (the device-filter chip taught
+   us that). */
 .query-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 4px 0 8px; }
-.query-input-wrap { position: relative; flex: 1 1 320px; min-width: 240px; }
+.query-input-wrap { position: relative; flex: 1 1 320px; min-width: 240px; display: flex; }
+.query-input-wrap > nmui-text-field { flex: 1; min-width: 0; }
 .query-input { width: 100%; }
+/* The search input lives inside the text-field now: the field draws
+   the box, so the input's own box must go — the .text-input class
+   would otherwise beat the component's input reset. */
+nmui-text-field .text-input {
+  background: transparent; border: 0; border-radius: 0; padding: 0;
+}
+nmui-text-field .text-input:focus { outline: none; }
+/* Magnifier inside the search field (the text-field's trailing
+   button): an icon button, no box of its own. */
+#query-search {
+  background: none; border: 0; padding: 8px; border-radius: 999px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--md-sys-color-on-surface-variant);
+}
+#query-search:hover { background: color-mix(in srgb, var(--md-sys-color-on-surface) 8%, transparent); }
+#query-search:disabled { opacity: 0.38; cursor: default; }
+#query-search svg { width: 24px; height: 24px; display: block; }
 .query-suggest {
   position: absolute; top: 100%; left: 0; right: 0; z-index: 10;
   background: var(--md-sys-color-surface-container-high);
@@ -120,9 +139,6 @@ main {
 .query-suggest button[aria-selected="true"],
 .query-suggest button:hover { background: var(--md-sys-color-surface-container); }
 .query-suggest .q-hint { color: var(--md-sys-color-on-surface-variant); margin-left: 8px; }
-.query-ai { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 4px 0 8px; }
-.query-ai[hidden] { display: none; }
-.query-ai .query-input { flex: 1 1 320px; min-width: 240px; }
 
 /* Menu check marks: nmui-menu marks the selected item with
    <icon class="check">check</icon> — a Material Symbols ligature.
