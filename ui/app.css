@@ -365,6 +365,13 @@ footer.note { color: var(--md-sys-color-on-surface-variant); font-size: 12px; }
 
 /* The blind-check warning: a running capture gone quiet. */
 #capture-quiet { color: var(--md-sys-color-error, #f87171); font-weight: 600; }
+/* Canary PLC card: the bind/port inputs sit in the controls row, and
+   a touch reads like the capture-quiet warning — red, because a
+   visitor to the canary is an intruder by definition. */
+.canary-bind { width: 130px; }
+.canary-port { width: 84px; }
+#canary-touched { color: var(--md-sys-color-error, #f87171); font-weight: 600; }
+#canary-touched[hidden] { display: none; }
 
 .event-log {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;

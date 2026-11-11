@@ -46,7 +46,7 @@
     <img id="splash-logo" src="./assets/deadband-logo.jpg" alt="Deadband"
          onerror="var s=document.getElementById('splash'); if(s) s.remove();">
     <p class="splash-sub">Real-time passive OT network monitor</p>
-    <p class="splash-version" id="splash-version">Deadband v0.1.8</p>
+    <p class="splash-version" id="splash-version">Deadband v0.1.9</p>
   </div>
   <div class="shell">
     <nmui-navigation rail expanded id="rail">
@@ -253,6 +253,32 @@
           join the access_bpf group, or run with sudo for a lab test — see docs/live-capture.md.</p>
         </nmui-card>
 
+        <nmui-card outlined>
+          <h2 class="card-title">Canary PLC</h2>
+          <p>A fake controller that nothing legitimate ever talks to — it is not
+          in the real plant's inventory, no HMI polls it, no historian reads it.
+          It answers Modbus requests with plausible fake values, and every
+          connection, every request, is an intruder by definition: no baseline,
+          no false positives. A touch shows up in the log below as an alert,
+          and the visitor joins the map as an unknown device.</p>
+          <p id="canary-status" class="sim-status">Canary is off</p>
+          <div class="card-actions replay-controls">
+            <label class="replay-speed">Listen on
+              <input id="canary-bind" class="text-input canary-bind" type="text" value="0.0.0.0" spellcheck="false" aria-label="Address to listen on">
+            </label>
+            <label class="replay-speed">Port
+              <input id="canary-port" class="text-input canary-port" type="number" value="502" min="1" max="65535" aria-label="Port to listen on">
+            </label>
+            <nmui-button filled id="btn-canary-start">Start canary</nmui-button>
+            <nmui-button outlined id="btn-canary-stop">Stop</nmui-button>
+          </div>
+          <p class="dim">The canary is not a feed — it runs alongside the simulation, a replay,
+          or live capture. Ports below 1024 need admin rights: if 502 refuses, run
+          with sudo for a lab test or use port 1502. macOS may ask to allow incoming
+          connections the first time. See docs/canary-plc.md.</p>
+          <p class="dim" id="canary-touched" hidden></p>
+        </nmui-card>
+
         <nmui-card outlined class="log-card">
           <h2 class="card-title">Live event log</h2>
           <div class="filter-row" id="log-filters">
@@ -457,7 +483,7 @@
         </nmui-card>
       </section>
 
-      <footer class="note">Deadband v0.1.8 · UI: nmui v0.43.7, vendored and pinned (ui/vendor/nmui) · Themes selectable in Settings</footer>
+      <footer class="note">Deadband v0.1.9 · UI: nmui v0.43.7, vendored and pinned (ui/vendor/nmui) · Themes selectable in Settings</footer>
     </main>
   </div>
 
@@ -1014,6 +1040,51 @@
   });
   loadCaptureInterfaces();
 
+  // ---- canary PLC -----------------------------------------------------
+  // A fake controller that nothing legit ever talks to. Any touch is
+  // an intruder — the touch itself is the alert, so there is no
+  // threshold to tune and nothing to learn.
+  const canaryStatusEl = document.getElementById('canary-status');
+  const canaryBindEl = document.getElementById('canary-bind');
+  const canaryPortEl = document.getElementById('canary-port');
+  const canaryTouchedEl = document.getElementById('canary-touched');
+
+  function showCanaryStatus(s) {
+    if (!s) return;
+    if (s.message) {
+      canaryStatusEl.textContent = 'Canary: ' + s.message;
+    } else if (s.running) {
+      canaryStatusEl.textContent = 'Canary armed on ' + (s.bind || '0.0.0.0') + ':' + s.port +
+        ' · ' + s.touches + (s.touches === 1 ? ' touch' : ' touches');
+    } else {
+      canaryStatusEl.textContent = 'Canary is off';
+    }
+    if (s.running && s.touches > 0 && s.last_touch) {
+      canaryTouchedEl.hidden = false;
+      canaryTouchedEl.textContent = 'Last touch: ' + s.last_touch +
+        '. Nothing legitimate talks to the canary — treat this visitor as an intruder.';
+    } else {
+      canaryTouchedEl.hidden = true;
+    }
+  }
+
+  document.getElementById('btn-canary-start').addEventListener('click', async () => {
+    if (!invoke) return;
+    const bind = (canaryBindEl.value || '0.0.0.0').trim();
+    const port = parseInt(canaryPortEl.value, 10);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      canaryStatusEl.textContent = 'Pick a port between 1 and 65535.';
+      return;
+    }
+    try { showCanaryStatus(await invoke('start_canary', { bind, port })); }
+    catch (err) { canaryStatusEl.textContent = 'Canary failed to start: ' + err; }
+  });
+  document.getElementById('btn-canary-stop').addEventListener('click', async () => {
+    if (!invoke) return;
+    try { showCanaryStatus(await invoke('stop_canary')); }
+    catch (err) { /* best-effort */ }
+  });
+
   // ---- alert bell -----------------------------------------------------
   // One place alerts are always visible, whatever view you're on. The
   // badge counts alerts raised since you last looked; opening the
@@ -1117,6 +1188,7 @@
       window._latestAlert = latestAlert;
       updateAlertBell(alerts);
       try { showCaptureStatus(await invoke('capture_status')); } catch (err) { /* capture status is best-effort */ }
+      try { showCanaryStatus(await invoke('canary_status')); } catch (err) { /* canary status is best-effort */ }
       const stateEl = document.getElementById('ov-state');
       const state = anomaly.risk_score >= 50 || rules.alerts_total > 0
         ? 'Needs attention' : anomaly.learning ? 'Learning' : 'Quiet';

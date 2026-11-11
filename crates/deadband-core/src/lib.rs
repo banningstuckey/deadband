@@ -27,12 +27,16 @@
 //!
 //! 1. **Passive only, forever.** Nothing in this crate ever transmits into
 //!    a monitored network: no scanning, no probing, no responses. Sources
-//!    read copies of traffic only.
+//!    read copies of traffic only. The one deliberate exception is the
+//!    canary PLC (`canary` module): an opt-in decoy, off by default,
+//!    that answers only requests addressed to itself — a silent decoy
+//!    teaches nothing. It never talks to a real device.
 //! 2. **AI warns, AI never acts.** Detection layers produce alerts and
 //!    explanations. They never block, disconnect, or reconfigure anything.
 //! 3. **Local first, no cloud.** All data stays on the user's machine.
 
 pub mod analyst;
+pub mod canary;
 pub mod capture;
 pub mod detect;
 pub mod engine;

@@ -6,7 +6,7 @@
 //! without a UI and reused by a future headless sensor.
 
 use deadband_core::analyst::AnalystClient;
-use deadband_core::model::{Event, EventKind};
+use deadband_core::model::{Device, DeviceRole, Event, EventKind, PurdueLevel};
 use deadband_core::source::{SimulatedSource, TrafficSource};
 use deadband_core::store::Store;
 use serde::Serialize;
@@ -23,6 +23,8 @@ struct AppState {
     replay_info: Arc<Mutex<ReplayInfo>>,
     capture_running: Arc<AtomicBool>,
     capture_info: Arc<Mutex<CaptureInfo>>,
+    canary_server: Arc<Mutex<Option<deadband_core::canary::CanaryServer>>>,
+    canary_info: Arc<Mutex<CanaryInfo>>,
     anomaly_shared: Arc<Mutex<AnomalyStatusDto>>,
 }
 
@@ -638,6 +640,183 @@ fn spawn_capture_thread(
 }
 
 
+// ---- canary PLC (feature program, item 3) ---------------------------
+// A fake controller that nothing legitimate ever talks to. Any touch
+// is an intruder by definition — no baseline, no false positives.
+// The canary is NOT a feed: it runs alongside the simulation, a
+// replay, or live capture (canary + capture together is the ideal
+// combo — the capture sees the visitor's packets on the wire, the
+// canary logs the Modbus conversation). Starting it stops nothing.
+//
+// Touches bypass process_packet_full on purpose: canary traffic must
+// never train the anomaly baseline — the visitor is not normal.
+// Each touch is recorded straight into the store as an alert event
+// and emitted live, exactly like a feed event.
+#[derive(Debug, Clone, Default)]
+struct CanaryInfo {
+    bind: String,
+    port: u16,
+    canary_ip: Option<String>,
+    started_at_ms: i64,
+    touches: u64,
+    last_touch: Option<String>,
+    last_touch_at_ms: Option<i64>,
+    message: Option<String>,
+}
+
+/// Canary state as sent to the frontend.
+#[derive(Debug, Serialize)]
+struct CanaryStatus {
+    running: bool,
+    bind: String,
+    port: u16,
+    canary_ip: Option<String>,
+    touches: u64,
+    last_touch: Option<String>,
+    last_touch_at_ms: Option<i64>,
+    message: Option<String>,
+}
+
+fn canary_status_of(state: &AppState) -> CanaryStatus {
+    let running = state
+        .canary_server
+        .lock()
+        .map(|server| server.is_some())
+        .unwrap_or(false);
+    let info = state.canary_info.lock().map(|info| info.clone()).unwrap_or_default();
+    CanaryStatus {
+        running,
+        bind: info.bind,
+        port: info.port,
+        canary_ip: info.canary_ip,
+        touches: info.touches,
+        last_touch: info.last_touch,
+        last_touch_at_ms: info.last_touch_at_ms,
+        message: info.message,
+    }
+}
+
+/// The address the canary pretends to be: the first non-loopback
+/// IPv4 address on the machine (what a visitor on the network
+/// actually reaches), falling back to loopback. The canary binds
+/// 0.0.0.0, so this is only its identity in the inventory and the
+/// event log — never its socket.
+fn canary_identity_ip() -> std::net::IpAddr {
+    if let Ok(ifs) = list_interfaces_inner() {
+        for iface in ifs {
+            for addr in iface.addresses {
+                if let Ok(ip) = addr.parse::<std::net::IpAddr>() {
+                    if ip.is_ipv4() && !ip.is_loopback() {
+                        return ip;
+                    }
+                }
+            }
+        }
+    }
+    std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1))
+}
+
+/// Starts the canary on `bind`:`port` (usually 0.0.0.0:502, or 1502
+/// without admin rights). A bind refusal comes straight back in the
+/// status message. Already running is a no-op returning the status.
+#[tauri::command]
+fn start_canary(
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+    bind: String,
+    port: u16,
+) -> CanaryStatus {
+    if state
+        .canary_server
+        .lock()
+        .map(|server| server.is_some())
+        .unwrap_or(false)
+    {
+        return canary_status_of(&state);
+    }
+    let canary_ip = canary_identity_ip();
+    if let Ok(mut info) = state.canary_info.lock() {
+        *info = CanaryInfo {
+            bind: bind.clone(),
+            port,
+            canary_ip: Some(canary_ip.to_string()),
+            started_at_ms: now_ms(),
+            touches: 0,
+            last_touch: None,
+            last_touch_at_ms: None,
+            message: None,
+        };
+    }
+    // The touch handler: count it, put the visitor in the inventory
+    // as an unknown device (they show on the map's UNPLACED strip),
+    // store the alert event, and stream it live.
+    let on_touch = {
+        let store = Arc::clone(&state.store);
+        let app = app.clone();
+        let info_handle = Arc::clone(&state.canary_info);
+        move |touch: deadband_core::canary::CanaryTouch| {
+            if let Ok(mut info) = info_handle.lock() {
+                info.touches += 1;
+                info.last_touch = Some(format!("{} — {}", touch.src_ip, touch.detail));
+                info.last_touch_at_ms = Some(touch.timestamp_s * 1000);
+            }
+            if let Ok(store) = store.lock() {
+                let _ = store.add_device(&Device::new(touch.src_ip, touch.timestamp_s));
+                let mut event = deadband_core::canary::touch_event(&touch, canary_ip);
+                if let Ok(id) = store.record_event(&event) {
+                    event.id = Some(id);
+                }
+                let _ = app.emit("traffic", EventDto::from(&event));
+            }
+        }
+    };
+    let config = deadband_core::canary::CanaryConfig { bind, port };
+    match deadband_core::canary::CanaryServer::start(&config, on_touch) {
+        Ok(server) => {
+            // The canary itself joins the inventory as a PLC at
+            // Level 1 — but only if this IP is not already known
+            // (add_device refreshes last_seen on conflict and never
+            // rewrites an existing role, so a known device keeps
+            // whatever the traffic said it was).
+            if let Ok(store) = state.store.lock() {
+                if !store.device_exists(canary_ip).unwrap_or(true) {
+                    let mut device = Device::new(canary_ip, now_ms() / 1000);
+                    device.role = DeviceRole::Plc;
+                    device.level = Some(PurdueLevel::Control);
+                    device.label = Some("Canary PLC (decoy)".to_string());
+                    let _ = store.add_device(&device);
+                }
+            }
+            if let Ok(mut slot) = state.canary_server.lock() {
+                *slot = Some(server);
+            }
+        }
+        Err(message) => {
+            if let Ok(mut info) = state.canary_info.lock() {
+                info.message = Some(message);
+            }
+        }
+    }
+    canary_status_of(&state)
+}
+
+/// Stops the canary. Stored touch events stay in the database.
+#[tauri::command]
+fn stop_canary(state: tauri::State<AppState>) -> CanaryStatus {
+    if let Ok(mut slot) = state.canary_server.lock() {
+        if let Some(server) = slot.take() {
+            server.stop();
+        }
+    }
+    canary_status_of(&state)
+}
+
+/// Current canary state (the UI polls this every 5 s).
+#[tauri::command]
+fn canary_status(state: tauri::State<AppState>) -> CanaryStatus {
+    canary_status_of(&state)
+}
+
 /// One rule, for the Rules view.
 #[derive(Debug, Serialize)]
 struct RuleDto {
@@ -1198,6 +1377,8 @@ pub fn run() {
                 replay_info: Arc::new(Mutex::new(ReplayInfo::default())),
                 capture_running: Arc::new(AtomicBool::new(false)),
                 capture_info: Arc::new(Mutex::new(CaptureInfo::default())),
+                canary_server: Arc::new(Mutex::new(None)),
+                canary_info: Arc::new(Mutex::new(CanaryInfo::default())),
                 anomaly_shared: Arc::new(Mutex::new(AnomalyStatusDto::default())),
             });
             Ok(())
@@ -1226,7 +1407,10 @@ pub fn run() {
             list_interfaces,
             start_capture,
             stop_capture,
-            capture_status
+            capture_status,
+            start_canary,
+            stop_canary,
+            canary_status
         ])
         .run(tauri::generate_context!())
         .expect("error while running Deadband");
