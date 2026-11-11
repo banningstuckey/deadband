@@ -181,7 +181,69 @@ nmui-menu > section > button > icon.check::before {
   #view-events .log-card { grid-column: 1 / -1; }
 }
 
-.page-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.page-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+
+/* Alert bell: the one place alerts are always visible, whatever view
+   you're on. The badge counts alerts you haven't looked at yet;
+   opening the panel marks them seen. The icon is inline SVG —
+   Deadband ships no icon font, so no ligature text can leak. */
+.alert-bell-wrap { position: relative; margin-left: auto; }
+.alert-bell {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; padding: 0; border: 0; border-radius: 999px;
+  background: none; color: var(--md-sys-color-on-surface-variant); cursor: pointer;
+}
+.alert-bell:hover { background: color-mix(in srgb, var(--md-sys-color-on-surface) 8%, transparent); }
+.alert-bell.has-unseen { color: var(--md-sys-color-error, #b3261e); }
+.alert-badge {
+  position: absolute; top: 2px; right: 0; min-width: 18px; height: 18px;
+  padding: 0 5px; box-sizing: border-box; border-radius: 999px;
+  background: var(--md-sys-color-error, #b3261e); color: #fff;
+  font-size: 11px; line-height: 18px; font-weight: 700; text-align: center;
+}
+.alert-badge[hidden] { display: none; }
+.alert-panel {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 30;
+  width: min(360px, 90vw); max-height: 420px; overflow: auto;
+  background: var(--md-sys-color-surface-container-high);
+  border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.35); padding: 12px;
+}
+.alert-panel-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.alert-item {
+  display: flex; gap: 10px; width: 100%; text-align: left;
+  background: none; border: 0; border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  padding: 8px 4px; font: inherit; font-size: 13px; cursor: pointer;
+  color: var(--md-sys-color-on-surface);
+}
+.alert-item:hover { background: var(--md-sys-color-surface-container); }
+.alert-item-time { flex: 0 0 auto; color: var(--md-sys-color-on-surface-variant); font-variant-numeric: tabular-nums; }
+.alert-item-summary { min-width: 0; }
+.alert-view-all { margin-top: 10px; }
+
+/* Rail collapse: the toggle sits at the top of the rail header. The
+   collapsed rail is nmui's own 96px variant — destinations show their
+   small label under an empty pill, so the pill is hidden and the label
+   rides centered instead; the brand keeps only its mark. */
+.rail-toggle {
+  background: none; border: 0; padding: 8px 10px; border-radius: 999px;
+  font: inherit; font-size: 13px; text-align: left; cursor: pointer;
+  color: var(--md-sys-color-on-surface-variant);
+}
+.rail-toggle:hover { background: color-mix(in srgb, var(--md-sys-color-on-surface) 8%, transparent); }
+nmui-navigation[rail][collapsed] .rail-toggle { padding: 8px; }
+nmui-navigation[rail][collapsed] .rail-toggle-label { display: none; }
+nmui-navigation[rail][collapsed] .rail-wordmark,
+nmui-navigation[rail][collapsed] .rail-wordmark-text { display: none; }
+nmui-navigation[rail][collapsed] .rail-brand-row { justify-content: center; }
+nmui-navigation[rail][collapsed] .rail-mark { margin-left: 0; }
+nmui-navigation[rail][collapsed] > destinations :is(a, button)::before { display: none; }
+nmui-navigation[rail][collapsed] > destinations :is(a, button):hover { background: color-mix(in srgb, var(--md-sys-color-on-surface-variant) 8%, transparent); border-radius: 999px; }
+nmui-navigation[rail][collapsed] > destinations :is(a, button)[selected] { background: var(--md-sys-color-secondary-container); border-radius: 999px; }
+nmui-navigation[rail][collapsed] > destinations :is(a, button) { height: 44px; }
+nmui-navigation[rail][collapsed] > destinations :is(a, button) > label {
+  position: static; width: auto; text-align: left; padding-inline-start: 8px;
+}
 
 .phase-tag {
   color: var(--md-sys-color-tertiary);

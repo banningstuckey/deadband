@@ -48,6 +48,7 @@
   <div class="shell">
     <nmui-navigation rail expanded id="rail">
       <header>
+        <button class="rail-toggle" id="rail-toggle" aria-label="Collapse menu" title="Collapse menu"><span class="rail-toggle-glyph">&laquo;</span> <span class="rail-toggle-label">Collapse</span></button>
         <div class="rail-brand-row">
           <img class="rail-mark" src="./assets/deadband-mark.png" alt=""
                onerror="this.remove()">
@@ -66,6 +67,17 @@
       <div class="page-head">
         <headline medium id="page-title">Live map</headline>
         <span class="phase-tag">Phase 6 — AI analyst (optional)</span>
+        <div class="alert-bell-wrap">
+          <button class="alert-bell" id="alert-bell" aria-label="Alerts" title="Alerts">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 22c1.1 0 2-.9 2-2h-4a2 2 0 0 0 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" fill="currentColor"/></svg>
+            <span class="alert-badge" id="alert-badge" hidden>0</span>
+          </button>
+          <div class="alert-panel" id="alert-panel" hidden>
+            <div class="alert-panel-head"><strong>Alerts</strong><span class="dim" id="alert-panel-count"></span></div>
+            <div id="alert-list"></div>
+            <button class="chip-btn alert-view-all" id="alert-view-all">View all alerts in the Events log &rarr;</button>
+          </div>
+        </div>
       </div>
 
       <section id="view-live" class="view">
@@ -430,6 +442,38 @@
 
 <script>
   const invoke = window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke;
+
+  // ---- rail collapse / expand -----------------------------------------
+  // nmui's own 96px collapsed variant (labels under an empty pill —
+  // the pill is hidden by app.css, the label rides centered). The
+  // choice persists; the splash covers the restore, so no flash.
+  const railEl = document.getElementById('rail');
+  const railToggle = document.getElementById('rail-toggle');
+  function setRailCollapsed(collapsed) {
+    if (!railEl) return;
+    if (collapsed) {
+      railEl.removeAttribute('expanded');
+      railEl.setAttribute('collapsed', '');
+    } else {
+      railEl.setAttribute('expanded', '');
+      railEl.removeAttribute('collapsed');
+    }
+    try { localStorage.setItem('deadband.railCollapsed', collapsed ? '1' : '0'); } catch (err) {}
+    if (railToggle) {
+      railToggle.setAttribute('aria-label', collapsed ? 'Expand menu' : 'Collapse menu');
+      railToggle.title = collapsed ? 'Expand menu' : 'Collapse menu';
+      const glyph = railToggle.querySelector('.rail-toggle-glyph');
+      if (glyph) glyph.textContent = collapsed ? '\u00bb' : '\u00ab';
+      const label = railToggle.querySelector('.rail-toggle-label');
+      if (label) label.textContent = collapsed ? 'Expand' : 'Collapse';
+    }
+  }
+  try {
+    if (localStorage.getItem('deadband.railCollapsed') === '1') setRailCollapsed(true);
+  } catch (err) {}
+  if (railToggle) railToggle.addEventListener('click', () => {
+    setRailCollapsed(!railEl.hasAttribute('collapsed'));
+  });
 
   // ---- menu-field helpers (defined here, before any use) -----------------
   // M3 exposed dropdown: a readonly nmui-text-field shows the value,
@@ -882,6 +926,91 @@
   });
   setInterval(refreshReplayStatus, 1000);
 
+  // ---- alert bell -----------------------------------------------------
+  // One place alerts are always visible, whatever view you're on. The
+  // badge counts alerts raised since you last looked; opening the
+  // panel marks them seen (persisted, so a reload doesn't resurrect
+  // the count). The list rides the overview poll's own fetch — no
+  // extra round trip.
+  let alertsSeenTs = 0;
+  try { alertsSeenTs = +(localStorage.getItem('deadband.alertsSeenTs') || 0); } catch (err) {}
+  let latestAlerts = [];
+  const bellBtn = document.getElementById('alert-bell');
+  const bellBadge = document.getElementById('alert-badge');
+  const bellPanel = document.getElementById('alert-panel');
+  const bellList = document.getElementById('alert-list');
+  const bellCount = document.getElementById('alert-panel-count');
+  function updateAlertBell(recent) {
+    latestAlerts = (recent || []).filter((e) => e.kind === 'alert').slice(0, 8);
+    const unseen = (recent || []).filter((e) => e.kind === 'alert' && e.timestamp > alertsSeenTs).length;
+    if (bellBadge) {
+      bellBadge.hidden = unseen === 0;
+      bellBadge.textContent = unseen > 99 ? '99+' : String(unseen);
+    }
+    if (bellBtn) bellBtn.classList.toggle('has-unseen', unseen > 0);
+    if (bellPanel && !bellPanel.hidden) renderAlertPanel();
+  }
+  function renderAlertPanel() {
+    if (!bellList) return;
+    bellList.innerHTML = '';
+    if (!latestAlerts.length) {
+      const p = document.createElement('p');
+      p.className = 'dim';
+      p.textContent = 'No alerts yet — normal traffic stays quiet.';
+      bellList.appendChild(p);
+    }
+    latestAlerts.forEach((a) => {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'alert-item';
+      const t = document.createElement('span');
+      t.className = 'alert-item-time';
+      t.textContent = fmtTime(a.timestamp);
+      const s = document.createElement('span');
+      s.className = 'alert-item-summary';
+      s.textContent = a.summary;
+      row.appendChild(t);
+      row.appendChild(s);
+      row.addEventListener('click', () => { closeAlertPanel(); showAlertsInLog(); });
+      bellList.appendChild(row);
+    });
+    if (bellCount) bellCount.textContent = latestAlerts.length ? latestAlerts.length + ' recent' : '';
+  }
+  function markAlertsSeen() {
+    alertsSeenTs = latestAlerts.reduce((m, a) => Math.max(m, a.timestamp || 0), alertsSeenTs);
+    try { localStorage.setItem('deadband.alertsSeenTs', String(alertsSeenTs)); } catch (err) {}
+    if (bellBadge) bellBadge.hidden = true;
+    if (bellBtn) bellBtn.classList.remove('has-unseen');
+  }
+  function openAlertPanel() {
+    if (!bellPanel) return;
+    renderAlertPanel();
+    bellPanel.hidden = false;
+    markAlertsSeen();
+  }
+  function closeAlertPanel() { if (bellPanel) bellPanel.hidden = true; }
+  function showAlertsInLog() {
+    logFilter = 'alerts';
+    try { localStorage.setItem('deadband.logFilter', 'alerts'); } catch (err) {}
+    document.querySelectorAll('#log-filters .chip-btn')
+      .forEach((b) => b.toggleAttribute('selected', b.dataset.filter === 'alerts'));
+    applyLogFilters();
+    const railLink = document.querySelector('[data-view="events"]');
+    if (railLink) railLink.click();
+  }
+  if (bellBtn) bellBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (bellPanel && bellPanel.hidden) openAlertPanel(); else closeAlertPanel();
+  });
+  document.addEventListener('click', (e) => {
+    if (bellPanel && !bellPanel.hidden && !e.target.closest('.alert-bell-wrap')) closeAlertPanel();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeAlertPanel();
+  });
+  const bellViewAll = document.getElementById('alert-view-all');
+  if (bellViewAll) bellViewAll.addEventListener('click', () => { closeAlertPanel(); showAlertsInLog(); });
+
   // ---- overview strip (Live view) -----------------------------------------
   async function loadOverview() {
     if (!invoke) return;
@@ -893,6 +1022,7 @@
       window._alertsTotal = rules.alerts_total;
       if (window._dashTick) window._dashTick(rules.alerts_total);
       const latestAlert = recent.find((e) => e.kind === 'alert');
+      updateAlertBell(recent);
       const stateEl = document.getElementById('ov-state');
       const state = anomaly.risk_score >= 50 || rules.alerts_total > 0
         ? 'Needs attention' : anomaly.learning ? 'Learning' : 'Quiet';
